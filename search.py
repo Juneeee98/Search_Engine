@@ -13,10 +13,8 @@ from java.nio.file import Paths
 lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 
 def search_by_business_name(searcher, analyzer, query_string, N):
-    """
-    Searches for businesses by their name and provides star distribution for each result.
-    """
-    start_time = time.time() 
+    """Searches for businesses by their name and provides star distribution for each result."""
+    start_time = time.time()
     query = QueryParser("name", analyzer).parse(query_string)
     hits = searcher.search(query, N)
     end_time = time.time()
@@ -47,11 +45,8 @@ def search_by_business_name(searcher, analyzer, query_string, N):
     return results
 
 def search_by_review_text_with_business(searcher, analyzer, query_string, N):
-    """
-    Searches for reviews by keywords in the review text and retrieves associated business names.
-    Displays star distribution for the business associated with the review.
-    """
-    start_time = time.time() 
+    """Searches for reviews by keywords in the review text and retrieves associated business names."""
+    start_time = time.time()
     query = QueryParser("review_text", analyzer).parse(query_string)
     hits = searcher.search(query, N)
     end_time = time.time()
@@ -103,10 +98,8 @@ def search_by_review_text_with_business(searcher, analyzer, query_string, N):
     return prioritized_results[:N]
 
 def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
-    """
-    Searches for businesses within a given geospatial bounding box and provides star distribution and address information.
-    """
-    start_time = time.time() 
+    """Searches for businesses within a given geospatial bounding box."""
+    start_time = time.time()
     latitude_query = DoublePoint.newRangeQuery("latitude", lat_min, lat_max)
     longitude_query = DoublePoint.newRangeQuery("longitude", lon_min, lon_max)
 
@@ -147,10 +140,12 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
 
     return results
 
-def print_search_results(hits, searcher, search_type):
-    """
-    Prints search results in a more informative manner, including star distribution.
-    """
+def print_search_results(hits, search_type):
+    """Prints search results in a more informative manner, including star distribution."""
+    if not hits:
+        print("No results found.")
+        return
+    
     print("\nResults:")
     
     for result in hits:
@@ -169,44 +164,83 @@ def print_search_results(hits, searcher, search_type):
         if search_type == "geospatial":
             print(f"Address: {result['address']}, Postal Code: {result['postal_code']}")
         
-        print(f"Score: {result['score']}")
+        print(f"Score: {result['score']:.4f}")
         print("-" * 40)
 
 def terminal_ui(searcher, analyzer):
-    """
-    Terminal UI for selecting the type of search and interacting with the search engine.
-    """
+    """Terminal UI for selecting the type of search and interacting with the search engine."""
     while True:
         print("\nSearch Options:")
         print("1. Search by Business Name")
         print("2. Search by Review Text")
         print("3. Geospatial Search (Bounding Box)")
         print("4. Exit")
-        choice = input("Enter the type of search you want (1-4): ")
+        choice = input("Enter the type of search you want (1-4): ").strip()
+    
+        if not choice.isdigit() or not (1 <= int(choice) <= 4):
+            print("Invalid choice. Please enter a number between 1 and 4.")
+            continue
 
-        if choice == '4':
+        choice = int(choice)
+
+        if choice == 4:
             print("Exiting...")
             break
 
-        N = int(input("Enter the number of results you want (N): "))
+        while True:
+            try:
+                N = int(input("Enter the number of results you want (N): "))
+                if N <= 0:
+                    print("Number of results must be a positive integer. Please try again.")
+                    continue  # Prompt again for a positive integer
+                break  # Exit the loop if N is valid
+            except ValueError:
+                print("Invalid input. Please enter a positive integer for the number of results.")
+                # continue is not necessary here; it will loop back automatically
 
-        if choice == '1':
-            business_name = input("Enter the business name: ")
+        if choice == 1:
+            business_name = input("Enter the business name: ").strip()
+            if len(business_name) == 0:
+                print("Business name cannot be empty. Please enter a valid business name.")
+                continue
+            elif len(business_name) < 3:
+                print("Business name is too short. Please enter at least 3 characters.")
+                continue
             hits = search_by_business_name(searcher, analyzer, business_name, N)
-            print_search_results(hits, searcher, "business")
-        elif choice == '2':
-            review_text = input("Enter the review text: ")
+            print_search_results(hits, "business") if hits else print("No results found for this business name.")
+            
+            
+        elif choice == 2:
+            review_text = input("Enter the review text: ").strip()
+            if len(review_text) == 0:
+                print("Review text cannot be empty. Please enter valid text.")
+                continue
+            elif len(review_text) < 3:
+                print("Review text is too short. Please enter at least 3 characters.")
+                continue
             hits = search_by_review_text_with_business(searcher, analyzer, review_text, N)
-            print_search_results(hits, searcher, "review")
-        elif choice == '3':
-            lat_min = float(input("Enter minimum latitude: "))
-            lat_max = float(input("Enter maximum latitude: "))
-            lon_min = float(input("Enter minimum longitude: "))
-            lon_max = float(input("Enter maximum longitude: "))
-            hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
-            print_search_results(hits, searcher, "geospatial")
-        else:
-            print("Invalid choice. Please select again.")
+            print_search_results(hits, "review") if hits else print("No reviews found matching this text.")
+
+        elif choice == 3:
+            try:
+                lat_min = float(input("Enter minimum latitude: "))
+                lat_max = float(input("Enter maximum latitude: "))
+                lon_min = float(input("Enter minimum longitude: "))
+                lon_max = float(input("Enter maximum longitude: "))
+                if lat_min > lat_max:
+                    print("Minimum latitude cannot be greater than maximum latitude.")
+                    continue
+                if lon_min > lon_max:
+                    print("Minimum longitude cannot be greater than maximum longitude.")
+                    continue
+                hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
+                print_search_results(hits, "geospatial") if hits else print("No businesses found within this bounding box.")
+            except ValueError:
+                    print("Invalid input for latitude or longitude. Please try again.")
+            except Exception as e:
+                print(f"Error during search: {e}")
+        
+
 
 if __name__ == "__main__":
     # Define the path to the index directory
