@@ -6,7 +6,6 @@ from org.apache.lucene.index import IndexWriter, IndexWriterConfig
 from org.apache.lucene.document import Document, StringField, TextField, DoubleField, IntField
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from java.nio.file import Paths
-from org.apache.lucene.index import IndexWriterConfig, IndexWriter
 
 # Initialize the Lucene JVM
 lucene.initVM(vmargs=['-Djava.awt.headless=true'])
@@ -47,22 +46,19 @@ def index_business_data(writer, business_data, business_map):
     # Index the document
     writer.addDocument(doc)
 
-def index_review_data(writer, review_data, business_map):
+def index_review_data(writer, review_data):
     """
-    Indexes review data and links it to the business using the business_id.
+    Indexes review data without filtering by business_id. The business ID mapping will be handled at search time.
     """
     doc = Document()
 
     # Link review to business by business_id
-    business_id = review_data["business_id"]
-    business_name = business_map.get(business_id, "Unknown Business")
-    
+    business_id = review_data.get("business_id", "")
     doc.add(StringField("business_id", business_id, StringField.Store.YES))
-    doc.add(TextField("business_name", business_name, TextField.Store.YES))
+
+    # Add the rest of the review fields
     doc.add(StringField("review_id", review_data["review_id"], StringField.Store.YES))
     doc.add(StringField("user_id", review_data["user_id"], StringField.Store.YES))
-
-    # Index review text and metadata
     doc.add(TextField("review_text", review_data.get("text", ""), TextField.Store.YES))
     doc.add(DoubleField("stars", float(review_data.get("stars", 0.0)), DoubleField.Store.YES))
     doc.add(IntField("useful", int(review_data.get("useful", 0)), IntField.Store.YES))
@@ -113,7 +109,7 @@ def load_and_index_json(writer, business_file_path, review_file_path, total_docu
         for line in review_file:
             try:
                 review_data = json.loads(line)
-                index_review_data(writer, review_data, business_map)
+                index_review_data(writer, review_data)
                 indexed_docs += 1
 
                 # Log time every 10%
