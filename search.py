@@ -15,7 +15,7 @@ lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 def search_by_business_name(searcher, analyzer, query_string, N):
     """Searches for businesses by their name and provides star distribution for each result."""
     start_time = time.time()
-    query = QueryParser("name", analyzer).parse(query_string)
+    query = QueryParser("name_index", analyzer).parse(query_string)
     hits = searcher.search(query, N)
     end_time = time.time()
 
