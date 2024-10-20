@@ -248,6 +248,10 @@ def print_search_results(hits, searcher, search_type):
     """
     Prints search results in a more informative manner, including star distribution and other details.
     """
+    if not hits:
+        print("No results found.")
+        return
+   
     print("\nResults:")
     
     for result in hits:
@@ -344,6 +348,8 @@ def terminal_ui(searcher, analyzer):
                     print("Invalid input for latitude or longitude. Please try again.")
             except Exception as e:
                 print(f"Error during search: {e}")
+        
+
 
 if __name__ == "__main__":
     # Define the path to the index directory
