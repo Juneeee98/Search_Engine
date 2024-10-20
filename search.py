@@ -281,30 +281,69 @@ def terminal_ui(searcher, analyzer):
         print("3. Geospatial Search (Bounding Box)")
         print("4. Exit")
         choice = input("Enter the type of search you want (1-4): ")
+    
+        if not choice.isdigit() or not (1 <= int(choice) <= 4):
+            print("Invalid choice. Please enter a number between 1 and 4.")
+            continue
 
-        if choice == '4':
+        choice = int(choice)
+
+        if choice == 4:
             print("Exiting...")
             break
 
-        N = int(input("Enter the number of results you want (N): "))
+        while True:
+            try:
+                N = int(input("Enter the number of results you want (N): "))
+                if N <= 0:
+                    print("Number of results must be a positive integer. Please try again.")
+                    continue  # Prompt again for a positive integer
+                break  # Exit the loop if N is valid
+            except ValueError:
+                print("Invalid input. Please enter a positive integer for the number of results.")
+                # continue is not necessary here; it will loop back automatically
 
-        if choice == '1':
-            business_name = input("Enter the business name: ")
+        if choice == 1:
+            business_name = input("Enter the business name: ").strip()
+            if len(business_name) == 0:
+                print("Business name cannot be empty. Please enter a valid business name.")
+                continue
+            elif len(business_name) < 3:
+                print("Business name is too short. Please enter at least 3 characters.")
+                continue
             hits = search_by_business_name(searcher, analyzer, business_name, N)
-            print_search_results(hits, searcher, "business")
-        elif choice == '2':
-            review_text = input("Enter the review text: ")
+            print_search_results(hits, searcher, "business") if hits else print("No results found for this business name.")
+            
+            
+        elif choice == 2:
+            review_text = input("Enter the review text: ").strip()
+            if len(review_text) == 0:
+                print("Review text cannot be empty. Please enter valid text.")
+                continue
+            elif len(review_text) < 3:
+                print("Review text is too short. Please enter at least 3 characters.")
+                continue
             hits = search_by_review_text_with_business(searcher, analyzer, review_text, N)
-            print_search_results(hits, searcher, "review")
-        elif choice == '3':
-            lat_min = float(input("Enter minimum latitude: "))
-            lat_max = float(input("Enter maximum latitude: "))
-            lon_min = float(input("Enter minimum longitude: "))
-            lon_max = float(input("Enter maximum longitude: "))
-            hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
-            print_search_results(hits, searcher, "geospatial")
-        else:
-            print("Invalid choice. Please select again.")
+            print_search_results(hits, searcher, "review") if hits else print("No reviews found matching this text.")
+
+        elif choice == 3:
+            try:
+                lat_min = float(input("Enter minimum latitude: "))
+                lat_max = float(input("Enter maximum latitude: "))
+                lon_min = float(input("Enter minimum longitude: "))
+                lon_max = float(input("Enter maximum longitude: "))
+                if lat_min > lat_max:
+                    print("Minimum latitude cannot be greater than maximum latitude.")
+                    continue
+                if lon_min > lon_max:
+                    print("Minimum longitude cannot be greater than maximum longitude.")
+                    continue
+                hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
+                print_search_results(hits, searcher, "geospatial") if hits else print("No businesses found within this bounding box.")
+            except ValueError:
+                    print("Invalid input for latitude or longitude. Please try again.")
+            except Exception as e:
+                print(f"Error during search: {e}")
 
 if __name__ == "__main__":
     # Define the path to the index directory
