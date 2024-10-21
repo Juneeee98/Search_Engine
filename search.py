@@ -275,14 +275,16 @@ def print_search_results(hits, searcher, search_type):
         print("-" * 40)
 
 def terminal_ui(searcher, analyzer):
-    """Terminal UI for selecting the type of search and interacting with the search engine."""
+    """
+    Terminal UI for selecting the type of search and interacting with the search engine.
+    """
     while True:
         print("\nSearch Options:")
         print("1. Search by Business Name")
         print("2. Search by Review Text")
         print("3. Geospatial Search (Bounding Box)")
         print("4. Exit")
-        choice = input("Enter the type of search you want (1-4): ").strip()
+        choice = input("Enter the type of search you want (1-4): ")
     
         if not choice.isdigit() or not (1 <= int(choice) <= 4):
             print("Invalid choice. Please enter a number between 1 and 4.")
