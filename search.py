@@ -1,5 +1,6 @@
 import lucene
 import time
+import math
 from collections import defaultdict
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import DirectoryReader
@@ -11,6 +12,22 @@ from java.nio.file import Paths
 
 # Initialize the Lucene JVM
 lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculates the Haversine distance between two latitude/longitude points.
+    """
+    R = 6371  # Earth radius in kilometers
+    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
+    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
+
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    distance = R * c
+    return distance
 
 def search_by_business_name(searcher, analyzer, query_string, N):
     """Searches for businesses by their name and provides star distribution for each result."""
@@ -140,7 +157,7 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
 
     return results
 
-def print_search_results(hits, search_type):
+def print_search_results(hits, searcher, search_type):
     """Prints search results in a more informative manner, including star distribution."""
     if not hits:
         print("No results found.")
@@ -207,7 +224,7 @@ def terminal_ui(searcher, analyzer):
                 print("Business name is too short. Please enter at least 3 characters.")
                 continue
             hits = search_by_business_name(searcher, analyzer, business_name, N)
-            print_search_results(hits, "business") if hits else print("No results found for this business name.")
+            print_search_results(hits, searcher, "business") if hits else print("No results found for this business name.")
             
             
         elif choice == 2:
@@ -219,7 +236,7 @@ def terminal_ui(searcher, analyzer):
                 print("Review text is too short. Please enter at least 3 characters.")
                 continue
             hits = search_by_review_text_with_business(searcher, analyzer, review_text, N)
-            print_search_results(hits, "review") if hits else print("No reviews found matching this text.")
+            print_search_results(hits, searcher, "review") if hits else print("No reviews found matching this text.")
 
         elif choice == 3:
             try:
@@ -234,7 +251,7 @@ def terminal_ui(searcher, analyzer):
                     print("Minimum longitude cannot be greater than maximum longitude.")
                     continue
                 hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
-                print_search_results(hits, "geospatial") if hits else print("No businesses found within this bounding box.")
+                print_search_results(hits, searcher, "geospatial") if hits else print("No businesses found within this bounding box.")
             except ValueError:
                     print("Invalid input for latitude or longitude. Please try again.")
             except Exception as e:
