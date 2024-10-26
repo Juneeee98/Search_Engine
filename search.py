@@ -1,6 +1,7 @@
 import lucene
 import time
 import math
+from math import log10
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import DirectoryReader, Term
 from org.apache.lucene.analysis.standard import StandardAnalyzer
@@ -28,6 +29,12 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     distance = R * c
     return distance
 
+def calculate_log_weight(value):
+    """
+    Calculates a log-based weight for a given value.
+    """
+    return 1 + log10(value) if value > 0 else 0
+
 def search_by_business_name(searcher, analyzer, query_string, N):
     """
     Searches for businesses by their name and provides star distribution for each result.
@@ -38,12 +45,18 @@ def search_by_business_name(searcher, analyzer, query_string, N):
     # Execute keyword search for business name
     query = QueryParser("name", analyzer).parse(query_string)
 
-    # Retrieve ALL matching documents first (set a high max limit)
-    max_results = max(50, 2 * N)  # Set this high to ensure all matching docs are retrieved
-    hits = searcher.search(query, max_results)
-    end_time = time.time()
+    # Calculate max_results based on term frequencies
+    max_freq = 0
+    terms = query_string.split()
+    for term in terms:
+        # Get document frequency of each term
+        term_query = Term("name", term)
+        max_freq = max(max_freq, searcher.getIndexReader().docFreq(term_query))
 
-    print(f"\nQuery took {end_time - start_time:.4f} seconds")
+    # Set max_results based on frequency; higher frequency terms lead to higher max_results
+    max_results = max(N, min(1000, N * max(1, max_freq // 10)))
+
+    hits = searcher.search(query, max_results)
 
     results = []
     seen_business_ids = set()  # To track unique business IDs
@@ -61,19 +74,20 @@ def search_by_business_name(searcher, analyzer, query_string, N):
         review_count = int(doc.get("review_count") or "0")  # Convert review count to int
         score = hit.score
 
-        # Custom scoring logic: combine keyword relevance (default Lucene score) with stars and review count
-        if review_count == 0:  # Avoid dividing by zero
-            review_count = 1
+        # Apply log-based weights for stars and review_count
+        log_star_weight = calculate_log_weight(stars)
+        log_review_count_weight = calculate_log_weight(review_count)
 
-        # Adjust score based on stars and review count, with scaling factors
-        adjusted_score = score * (1 + (stars / 5.0)) * (1 + (review_count / 100.0))
+        # Adjust score based on logarithmic scaling of stars and review count
+        adjusted_score = score * log_star_weight * log_review_count_weight
 
         result = {
             "business_id": business_id,
             "name": name,
             "stars": stars,
             "review_count": review_count,
-            "score": adjusted_score  # Use custom adjusted score
+            "lucene_score": score,
+            "adjusted_score": adjusted_score  # Use custom adjusted score
         }
         results.append(result)
 
@@ -81,9 +95,12 @@ def search_by_business_name(searcher, analyzer, query_string, N):
         seen_business_ids.add(business_id)
 
     # Sort results by the adjusted score in descending order
-    results.sort(key=lambda x: x['score'], reverse=True)
+    results.sort(key=lambda x: x['adjusted_score'], reverse=True)
 
     # Return only the top N results after filtering
+    end_time = time.time()
+    print(f"\nQuery took {end_time - start_time:.4f} seconds")
+
     return results[:N]
 
 def search_by_review_text_with_business(searcher, analyzer, query_string, N):
@@ -95,11 +112,18 @@ def search_by_review_text_with_business(searcher, analyzer, query_string, N):
 
     # Retrieve all matching documents (using a large value for maxResults)
     query = QueryParser("review_text", analyzer).parse(query_string)
-    max_results = max(1000, 2 * N)  # Retrieve all potential matches
-    hits = searcher.search(query, max_results)
-    end_time = time.time()
 
-    print(f"\nQuery took {end_time - start_time:.4f} seconds")
+    # Determine max_results based on document frequency of terms in the query
+    terms = query_string.split()
+    max_freq = 0
+    for term in terms:
+        term_query = Term("review_text", term)
+        max_freq = max(max_freq, searcher.getIndexReader().docFreq(term_query))
+
+    # Set max_results based on term frequency
+    max_results = max(N, min(1000, N * max(1, max_freq // 10)))
+
+    hits = searcher.search(query, max_results)
 
     # Separate results with and without valid business names
     results_with_business_name = []
@@ -141,11 +165,16 @@ def search_by_review_text_with_business(searcher, analyzer, query_string, N):
             business_name = business_doc.get("name") or "N/A"
             stars = float(business_doc.get("stars") or "0")
 
-        # Custom scoring:
-        # Adjust the score based on usefulness, coolness, funniness, and business star rating
+        # Apply log-based weights
+        log_useful_weight = calculate_log_weight(useful) * useful_weight
+        log_cool_weight = calculate_log_weight(cool) * cool_weight
+        log_funny_weight = calculate_log_weight(funny) * funny_weight
+        log_star_weight = calculate_log_weight(stars)
+
+        # Custom scoring with log-transformed weights
         adjusted_score = score * (
-            1 + (useful * useful_weight / 10.0) + (cool * cool_weight / 10.0) + (funny * funny_weight / 10.0)
-        ) * (1 + stars / 5.0)
+            1 + log_useful_weight / 10.0 + log_cool_weight / 10.0 + log_funny_weight / 10.0
+        ) * log_star_weight
 
         result = {
             "business_id": business_id,
@@ -156,7 +185,8 @@ def search_by_review_text_with_business(searcher, analyzer, query_string, N):
             "cool": cool,
             "funny": funny,
             "stars": stars,
-            "score": adjusted_score  # Use custom adjusted score
+            "lucene_score": score,
+            "adjusted_score": adjusted_score  # Use custom adjusted score
         }
 
         # Separate reviews with valid business names
@@ -168,13 +198,16 @@ def search_by_review_text_with_business(searcher, analyzer, query_string, N):
         # Add the review_id to the seen set to prevent duplicates
         seen_review_ids.add(review_id)
 
-    # Combine prioritized results (with business name first)
+    # Combine results with business name first
     prioritized_results = results_with_business_name + results_without_business_name
 
-    # Sort by the adjusted score in descending order
-    prioritized_results.sort(key=lambda x: x['score'], reverse=True)
+    # Sort by business name presence (1 if name exists, 0 otherwise) and then by the score
+    prioritized_results.sort(key=lambda x: (1 if x["name"] != "N/A" else 0, x["adjusted_score"]), reverse=True)
+    end_time = time.time()
 
-    # Return only the top N results after filtering
+    print(f"\nQuery took {end_time - start_time:.4f} seconds")
+
+    # Return only the top N results
     return prioritized_results[:N]
 
 def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
@@ -197,16 +230,14 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
     boolean_query.add(longitude_query, BooleanClause.Occur.MUST)
     query = boolean_query.build()
 
-    # Retrieve all matching documents (use a large number for maxResults to allow for custom scoring)
-    max_results = 1000  # Retrieve all matches within the bounding box
+    # Set max_results heuristically based on N, assuming higher density in popular areas
+    max_results = max(1000, 5 * N)  # Adjust based on expected density
     hits = searcher.search(query, max_results)
-    end_time = time.time()
-
-    print(f"\nQuery took {end_time - start_time:.4f} seconds")
 
     results = []
 
     for hit in hits.scoreDocs:
+        score = hit.score
         doc = searcher.doc(hit.doc)
         business_id = doc.get("business_id")
         name = doc.get("name") or "N/A"
@@ -224,7 +255,7 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
         if distance_to_center == 0:
             distance_to_center = 0.001  # Avoid division by zero
 
-        adjusted_score = (1 / distance_to_center) * (1 + stars / 5.0) * (1 + review_count / 100.0)
+        adjusted_score = (10 / distance_to_center) * (1 + stars / 5.0) * (1 + review_count / 100.0) + score 
 
         result = {
             "business_id": business_id,
@@ -234,12 +265,18 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
             "stars": stars,
             "review_count": review_count,
             "distance_to_center": distance_to_center,
-            "score": adjusted_score
+            "latitude": latitude,
+            "longitude": longitude,
+            "lucene_score": score,
+            "adjusted_score": adjusted_score
         }
         results.append(result)
 
     # Sort results by the adjusted score in descending order
-    results.sort(key=lambda x: x['score'], reverse=True)
+    results.sort(key=lambda x: x['adjusted_score'], reverse=True)
+    
+    end_time = time.time()
+    print(f"\nQuery took {end_time - start_time:.4f} seconds")
 
     # Return the top N results
     return results[:N]
@@ -268,10 +305,12 @@ def print_search_results(hits, searcher, search_type):
         
         if search_type == "geospatial":
             print(f"Address: {result['address']}, Postal Code: {result['postal_code']}")
+            print(f"Latitude: {result['latitude']}, Longitude: {result['longitude']}")
             print(f"Distance to Center: {result['distance_to_center']:.2f} km")
         
         # Print adjusted score for geospatial and review searches
-        print(f"Adjusted Score: {result.get('score', result['score']):.10f}")
+        print(f"Lucene Score: {result.get('score', result['lucene_score']):.10f}")
+        print(f"Adjusted Score: {result.get('score', result['adjusted_score']):.10f}")
         print("-" * 40)
 
 def terminal_ui(searcher, analyzer):
@@ -332,20 +371,31 @@ def terminal_ui(searcher, analyzer):
 
         elif choice == 3:
             try:
+                # Input and validate latitude and longitude ranges
                 lat_min = float(input("Enter minimum latitude: "))
                 lat_max = float(input("Enter maximum latitude: "))
                 lon_min = float(input("Enter minimum longitude: "))
                 lon_max = float(input("Enter maximum longitude: "))
+                
+                # Validate latitude and longitude bounds
+                if not (-90 <= lat_min <= 90) or not (-90 <= lat_max <= 90):
+                    print("Latitude values must be between -90 and 90.")
+                    continue
+                if not (-180 <= lon_min <= 180) or not (-180 <= lon_max <= 180):
+                    print("Longitude values must be between -180 and 180.")
+                    continue
                 if lat_min > lat_max:
                     print("Minimum latitude cannot be greater than maximum latitude.")
                     continue
                 if lon_min > lon_max:
                     print("Minimum longitude cannot be greater than maximum longitude.")
                     continue
+
+                # Perform geospatial search
                 hits = geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N)
                 print_search_results(hits, searcher, "geospatial") if hits else print("No businesses found within this bounding box.")
             except ValueError:
-                    print("Invalid input for latitude or longitude. Please try again.")
+                print("Invalid input for latitude or longitude. Please try again.")
             except Exception as e:
                 print(f"Error during search: {e}")
         
