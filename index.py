@@ -1,5 +1,6 @@
 import json
 import lucene
+import os
 import time
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import IndexWriter, IndexWriterConfig
@@ -77,6 +78,23 @@ def count_documents_in_file(file_path):
     with open(file_path, "r") as file:
         return sum(1 for _ in file)
 
+def get_file_size(filepath):
+    """
+    Returns the size of a file in bytes.
+    """
+    return os.path.getsize(filepath)
+
+def get_directory_size(directory):
+    """
+    Returns the size of a directory in bytes.
+    """
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            total_size += os.path.getsize(filepath)
+    return total_size
+
 def load_and_index_json(writer, business_file_path, review_file_path, total_documents):
     """
     Loads business and review JSON data and indexes them, tracking time every 10% of documents.
@@ -148,11 +166,24 @@ def create_index(index_dir, business_json_file, review_json_file):
     finally:
         writer.close()
 
+    # Calculate original data size
+    business_data_size = get_file_size(business_json_file)
+    review_data_size = get_file_size(review_json_file)
+    original_data_size = business_data_size + review_data_size
+
+    # Calculate index size
+    index_size = get_directory_size(index_dir)
+
+    # Display size comparison
+    print(f"\nOriginal Data Size: {original_data_size / (1024 ** 2):.2f} MB")
+    print(f"Index Size: {index_size / (1024 ** 2):.2f} MB")
+    print(f"Reduction Factor: {(original_data_size / index_size):.2f}")
+
 if __name__ == "__main__":
     # Define the paths
     index_directory = "./index"  # Where your index will be stored
     business_json_file = "./dataset/yelp_academic_dataset_business.json"  # Path to business data
     review_json_file = "./dataset/yelp_academic_dataset_review.json"  # Path to review data
 
-    # Create the index
+    # Create the index and display size comparison
     create_index(index_directory, business_json_file, review_json_file)
