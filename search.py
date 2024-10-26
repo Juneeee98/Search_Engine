@@ -336,8 +336,6 @@ def print_search_results(hits, searcher, search_type):
             print(f"Useful: {result['useful']}, Funny: {result['funny']}, Cool: {result['cool']}")
         
         if search_type == "geospatial":
-            print(f"Address: {result['address']}, City: {result['city']}, State: {result['state']}")
-            print(f"Postal Code: {result['postal_code']}")
             print(f"Latitude: {result['latitude']}, Longitude: {result['longitude']}")
             print(f"Distance to Center: {result['distance_to_center']:.2f} km")
         
