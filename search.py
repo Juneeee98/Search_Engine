@@ -2,9 +2,11 @@ import lucene
 import time
 import math
 from math import log10
+from org.apache.lucene.analysis.tokenattributes import CharTermAttribute
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import DirectoryReader, Term
 from org.apache.lucene.analysis.standard import StandardAnalyzer
+from org.apache.lucene.analysis.en import EnglishAnalyzer
 from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import TermQuery, IndexSearcher, BooleanQuery, BooleanClause
 from org.apache.lucene.document import DoublePoint
@@ -35,12 +37,13 @@ def calculate_log_weight(value):
     """
     return 1 + log10(value) if value > 0 else 0
 
-def search_by_business_name(searcher, analyzer, query_string, N):
+def search_by_business_name(searcher, query_string, N):
     """
     Searches for businesses by their name and provides star distribution for each result.
     Custom scoring is applied based on star ratings and review count.
     """
     start_time = time.time()
+    analyzer = StandardAnalyzer()
 
     # Execute keyword search for business name
     query = QueryParser("name", analyzer).parse(query_string)
@@ -112,18 +115,32 @@ def search_by_business_name(searcher, analyzer, query_string, N):
 
     return results[:N]
 
-def search_by_review_text_with_business(searcher, analyzer, query_string, N):
+def search_by_review_text_with_business(searcher, query_string, N):
     """
     Searches for reviews by keywords in the review text and retrieves associated business names.
     Custom scoring is applied based on keyword relevance, usefulness, coolness, funniness, and business ratings.
     """
     start_time = time.time()
+    analyzer = StandardAnalyzer(EnglishAnalyzer.ENGLISH_STOP_WORDS_SET)
 
     # Retrieve all matching documents (using a large value for maxResults)
     query = QueryParser("review_text", analyzer).parse(query_string)
 
+    # Tokenize query string to filter out stop words
+    token_stream = analyzer.tokenStream("field", query_string)
+    token_stream.reset()
+
+    # Extract non-stop words from the token stream
+    terms = []
+    while token_stream.incrementToken():
+        term_text = token_stream.getAttribute(CharTermAttribute.class_).toString()
+        terms.append(term_text)
+    
+    # Close the token stream
+    token_stream.end()
+    token_stream.close()
+
     # Determine max_results based on document frequency of terms in the query
-    terms = query_string.split()
     max_freq = 0
     for term in terms:
         term_query = Term("review_text", term)
@@ -329,7 +346,7 @@ def print_search_results(hits, searcher, search_type):
         print(f"Adjusted Score: {result.get('score', result['adjusted_score']):.10f}")
         print("-" * 40)
 
-def terminal_ui(searcher, analyzer):
+def terminal_ui(searcher):
     """
     Terminal UI for selecting the type of search and interacting with the search engine.
     """
@@ -370,7 +387,7 @@ def terminal_ui(searcher, analyzer):
             elif len(business_name) < 3:
                 print("Business name is too short. Please enter at least 3 characters.")
                 continue
-            hits = search_by_business_name(searcher, analyzer, business_name, N)
+            hits = search_by_business_name(searcher, business_name, N)
             print_search_results(hits, searcher, "business") if hits else print("No results found for this business name.")
             
             
@@ -382,7 +399,7 @@ def terminal_ui(searcher, analyzer):
             elif len(review_text) < 3:
                 print("Review text is too short. Please enter at least 3 characters.")
                 continue
-            hits = search_by_review_text_with_business(searcher, analyzer, review_text, N)
+            hits = search_by_review_text_with_business(searcher, review_text, N)
             print_search_results(hits, searcher, "review") if hits else print("No reviews found matching this text.")
 
         elif choice == 3:
@@ -422,8 +439,7 @@ if __name__ == "__main__":
     index_directory = "./index"
 
     # Open the index directory
-    analyzer = StandardAnalyzer()
     searcher = IndexSearcher(DirectoryReader.open(FSDirectory.open(Paths.get(index_directory))))
 
     # Start the terminal UI for searching
-    terminal_ui(searcher, analyzer)
+    terminal_ui(searcher)
