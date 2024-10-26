@@ -38,10 +38,11 @@ def index_business_data(writer, business_data, business_map):
     doc.add(DoubleField("stars", float(business_data.get("stars", 0.0)), DoubleField.Store.YES))
     doc.add(IntField("review_count", int(business_data.get("review_count", 0)), IntField.Store.YES))
     
+    # remove categories as it is not used, can uncomment if needed for recommendation system
     # Check if categories field exists and is not None or empty
-    categories = business_data.get("categories")
-    if categories:
-        doc.add(TextField("categories", categories, TextField.Store.YES))
+    # categories = business_data.get("categories")
+    # if categories:
+    #     doc.add(TextField("categories", categories, TextField.Store.YES))
 
     # Index the document
     writer.addDocument(doc)
@@ -58,7 +59,8 @@ def index_review_data(writer, review_data):
 
     # Add the rest of the review fields
     doc.add(StringField("review_id", review_data["review_id"], StringField.Store.YES))
-    doc.add(StringField("user_id", review_data["user_id"], StringField.Store.YES))
+    # remove user_id as it is not used, but if the recommendation system require it can uncomment to use
+    # doc.add(StringField("user_id", review_data["user_id"], StringField.Store.YES))
     doc.add(TextField("review_text", review_data.get("text", ""), TextField.Store.YES))
     doc.add(DoubleField("stars", float(review_data.get("stars", 0.0)), DoubleField.Store.YES))
     doc.add(IntField("useful", int(review_data.get("useful", 0)), IntField.Store.YES))

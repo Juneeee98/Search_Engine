@@ -64,6 +64,11 @@ def search_by_business_name(searcher, analyzer, query_string, N):
     for hit in hits.scoreDocs:
         doc = searcher.doc(hit.doc)
         business_id = doc.get("business_id")
+        address = doc.get("address") or "N/A"
+        city = doc.get("city") or "N/A"
+        state = doc.get("state") or "N/A"
+        postal_code = doc.get("postal_code") or "N/A"
+
         
         # Skip if this business_id has already been seen
         if business_id in seen_business_ids:
@@ -84,6 +89,10 @@ def search_by_business_name(searcher, analyzer, query_string, N):
         result = {
             "business_id": business_id,
             "name": name,
+            "address": address,
+            "city": city,
+            "state": state,
+            "postal_code": postal_code,
             "stars": stars,
             "review_count": review_count,
             "lucene_score": score,
@@ -242,6 +251,8 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
         business_id = doc.get("business_id")
         name = doc.get("name") or "N/A"
         address = doc.get("address") or "N/A"
+        city = doc.get("city") or "N/A"
+        state = doc.get("state") or "N/A"
         postal_code = doc.get("postal_code") or "N/A"
         latitude = float(doc.get("latitude"))
         longitude = float(doc.get("longitude"))
@@ -261,6 +272,8 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
             "business_id": business_id,
             "name": name,
             "address": address,
+            "city": city,
+            "state": state,
             "postal_code": postal_code,
             "stars": stars,
             "review_count": review_count,
@@ -292,19 +305,22 @@ def print_search_results(hits, searcher, search_type):
     print("\nResults:")
     
     for result in hits:
-        print(f"Business ID: {result['business_id']}")
         print(f"Name: {result['name']}")
+        print(f"Business ID: {result['business_id']}")
         
         if search_type == "business" or search_type == "geospatial":
             print(f"Stars: {result['stars']}")
             print(f"Review Count: {result['review_count']}")
+            print(f"Address: {result['address']}, City: {result['city']}, State: {result['state']}")
+            print(f"Postal Code: {result['postal_code']}")
         
         if search_type == "review":
             print(f"Review Text: {result['review_text']}")
             print(f"Useful: {result['useful']}, Funny: {result['funny']}, Cool: {result['cool']}")
         
         if search_type == "geospatial":
-            print(f"Address: {result['address']}, Postal Code: {result['postal_code']}")
+            print(f"Address: {result['address']}, City: {result['city']}, State: {result['state']}")
+            print(f"Postal Code: {result['postal_code']}")
             print(f"Latitude: {result['latitude']}, Longitude: {result['longitude']}")
             print(f"Distance to Center: {result['distance_to_center']:.2f} km")
         
