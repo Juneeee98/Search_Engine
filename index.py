@@ -101,6 +101,7 @@ def load_and_index_json(writer, business_file_path, review_file_path, total_docu
     # Index business data
     indexed_docs = 0
     start_time = time.time()
+    last_segment_time = start_time
     interval = total_documents // 10  # Every 10%
     
     # Create a business_map to map business_id to business_name
@@ -116,8 +117,11 @@ def load_and_index_json(writer, business_file_path, review_file_path, total_docu
 
                 # Log time every 10%
                 if indexed_docs % interval == 0:
-                    elapsed_time = time.time() - start_time
-                    print(f"Indexed {indexed_docs} / {total_documents} documents, Time elapsed: {elapsed_time:.2f} seconds")
+                    curr_time = time.time()
+                    segment_elapsed_time = curr_time - last_segment_time
+                    total_elapsed_time = curr_time - start_time
+                    print(f"Indexed {indexed_docs} / {total_documents} documents, Segment time: {segment_elapsed_time:.2f} seconds, Total time elapsed: {total_elapsed_time:.2f} seconds")
+                    last_segment_time = curr_time
             except json.JSONDecodeError as e:
                 print(f"Error decoding JSON: {e}")
             except Exception as e:
@@ -133,8 +137,11 @@ def load_and_index_json(writer, business_file_path, review_file_path, total_docu
 
                 # Log time every 10%
                 if indexed_docs % interval == 0:
-                    elapsed_time = time.time() - start_time
-                    print(f"Indexed {indexed_docs} / {total_documents} documents, Time elapsed: {elapsed_time:.2f} seconds")
+                    curr_time = time.time()
+                    segment_elapsed_time = curr_time - last_segment_time
+                    total_elapsed_time = curr_time - start_time
+                    print(f"Indexed {indexed_docs} / {total_documents} documents, Segment time: {segment_elapsed_time:.2f} seconds, Total time elapsed: {total_elapsed_time:.2f} seconds")
+                    last_segment_time = curr_time
             except json.JSONDecodeError as e:
                 print(f"Error decoding JSON: {e}")
             except Exception as e:
@@ -178,11 +185,54 @@ def create_index(index_dir, business_json_file, review_json_file):
     print(f"Index Size: {index_size / (1024 ** 2):.2f} MB")
     print(f"Reduction Factor: {(original_data_size / index_size):.2f}")
 
+def filter_dataset_by_state(json_directory="./dataset", state="ID"):
+    """
+    Filters the business dataset by state and saves the filtered data to a new file.
+    """
+    # Load the business data
+    business_file_path = os.path.join(json_directory, "yelp_academic_dataset_business.json")
+    filtered_file_path = os.path.join(json_directory, f"{state.lower()}_business.json")
+
+    # Filter the business data by state
+    print(f"Filtering business data by state: {state}")
+    business_ids = set()
+    with open(business_file_path, "r") as business_file, open(filtered_file_path, "w") as filtered_file:
+        for line in business_file:
+            business_data = json.loads(line)
+            if business_data.get("state") == state:
+                filtered_file.write(json.dumps(business_data) + "\n")
+                business_ids.add(business_data.get("business_id"))
+
+    # Load reviews data
+    review_file_path = os.path.join(json_directory, "yelp_academic_dataset_review.json")
+    filtered_review_file_path = os.path.join(json_directory, f"{state.lower()}_review.json")
+
+    # Filter the review data by state
+    print(f"Filtering review data by state: {state}")
+    with open(review_file_path, "r") as review_file, open(filtered_review_file_path, "w") as filtered_review_file:
+        for line in review_file:
+            review_data = json.loads(line)
+            if review_data.get("business_id") in business_ids:
+                filtered_review_file.write(json.dumps(review_data) + "\n")
+
+    print(f"Filtered business data saved to {filtered_file_path}")
+    print(f"Filtered review data saved to {filtered_review_file_path}")
+
 if __name__ == "__main__":
     # Define the paths
     index_directory = "./index"  # Where your index will be stored
     business_json_file = "./dataset/yelp_academic_dataset_business.json"  # Path to business data
     review_json_file = "./dataset/yelp_academic_dataset_review.json"  # Path to review data
+
+    # Check if the dataset directory exists
+    assert os.path.exists("./dataset"), f"Dataset directory not found at ./dataset"
+
+    # Filter the dataset by state
+    if not os.path.exists("./dataset/id_business.json"):
+        filter_dataset_by_state(json_directory="./dataset", state="ID")
+    # Reassign files to
+    business_json_file = "./dataset/id_business.json"
+    review_json_file = "./dataset/id_review.json"
 
     # Create the index and display size comparison
     create_index(index_directory, business_json_file, review_json_file)
