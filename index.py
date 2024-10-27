@@ -60,8 +60,7 @@ def index_review_data(writer, review_data):
 
     # Add the rest of the review fields
     doc.add(StringField("review_id", review_data["review_id"], StringField.Store.YES))
-    # remove user_id as it is not used, but if the recommendation system require it can uncomment to use
-    # doc.add(StringField("user_id", review_data["user_id"], StringField.Store.YES))
+    doc.add(StringField("user_id", review_data["user_id"], StringField.Store.YES))
     doc.add(TextField("review_text", review_data.get("text", ""), TextField.Store.YES))
     doc.add(DoubleField("stars", float(review_data.get("stars", 0.0)), DoubleField.Store.YES))
     doc.add(IntField("useful", int(review_data.get("useful", 0)), IntField.Store.YES))

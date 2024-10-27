@@ -2,6 +2,8 @@ import lucene
 import time
 import math
 from math import log10
+from collections import Counter
+from spacy.lang.en import stop_words
 from org.apache.lucene.analysis.tokenattributes import CharTermAttribute
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import DirectoryReader, Term
@@ -10,7 +12,10 @@ from org.apache.lucene.analysis.en import EnglishAnalyzer
 from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import TermQuery, IndexSearcher, BooleanQuery, BooleanClause
 from org.apache.lucene.document import DoublePoint
+from org.apache.lucene.analysis import CharArraySet
+from java.util import Arrays
 from java.nio.file import Paths
+import matplotlib.pyplot as plt
 
 # Initialize the Lucene JVM
 lucene.initVM(vmargs=['-Djava.awt.headless=true'])
@@ -71,7 +76,6 @@ def search_by_business_name(searcher, query_string, N):
         city = doc.get("city") or "N/A"
         state = doc.get("state") or "N/A"
         postal_code = doc.get("postal_code") or "N/A"
-
         
         # Skip if this business_id has already been seen
         if business_id in seen_business_ids:
@@ -311,6 +315,179 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
     # Return the top N results
     return results[:N]
 
+def get_reviews_by_user(searcher, user_id):
+    """
+    Retrieve all reviews for a given user ID.
+    """
+    query = TermQuery(Term("user_id", user_id))
+    hits = searcher.search(query, 10000)  # Adjust the limit if needed
+    reviews = []
+    for hit in hits.scoreDocs:
+        doc = searcher.doc(hit.doc)
+        business_id =  doc.get("business_id")
+        # Use TermQuery to exactly match the business_id field
+        business_query = TermQuery(Term("business_id", business_id))
+        business_hits = searcher.search(business_query, 1)
+
+        if business_hits.totalHits.value > 0:
+            business_doc = searcher.doc(business_hits.scoreDocs[0].doc)
+            business_name = business_doc.get("name") or "N/A"
+            latitude = float(business_doc.get("latitude") or 0)
+            longitude = float(business_doc.get("longitude") or 0)
+
+        reviews.append({
+            "business_id": doc.get("business_id"),
+            "business_name": business_name or 'N/A',
+            "review_text": doc.get("review_text"),
+            "latitude": float(latitude or 0),
+            "longitude": float(longitude or 0),
+        })
+
+    return reviews
+
+def plot_user_review_distribution(searcher):
+    """
+    Plot distribution of review counts per user.
+    """
+    reader = searcher.getIndexReader()
+    review_counts = Counter()
+    visited_review_ids = set()  # Track visited review IDs to avoid duplicates
+
+    # Iterate over all documents and count reviews per user, avoiding duplicates
+    print(reader.maxDoc())
+    for i in range(reader.maxDoc()):
+        doc = reader.document(i)
+        review_id = doc.get("review_id")
+        
+        # Skip this document if the review ID has already been processed
+        if review_id in visited_review_ids:
+            continue
+        
+        # Mark this review ID as visited
+        visited_review_ids.add(review_id)
+        
+        # Increment the count for this user ID
+        user_id = doc.get("user_id")
+        if user_id:
+            review_counts[user_id] += 1
+
+    # Prepare data for plotting
+    review_frequency = Counter(review_counts.values())
+    x = list(review_frequency.keys())
+    y = list(review_frequency.values())
+
+    plt.figure(figsize=(10, 5))
+    plt.scatter(x, y, marker='o')  # Scatter plot to avoid line connections
+    plt.xlabel('Number of Reviews')
+    plt.ylabel('Number of Users')
+    plt.title('User Review Contribution Distribution')
+    plt.grid(True)
+
+    plt.show()
+
+def calculate_bounding_box(reviews):
+    """
+    Calculate the bounding box for the geographical locations of businesses reviewed by a user.
+    """
+    latitudes = [r["latitude"] for r in reviews if r["latitude"] != 0]
+    longitudes = [r["longitude"] for r in reviews if r["longitude"] != 0]
+
+    if latitudes and longitudes:
+        return {
+            "lat_min": min(latitudes),
+            "lat_max": max(latitudes),
+            "lon_min": min(longitudes),
+            "lon_max": max(longitudes),
+        }
+    return None
+
+def get_top_words_and_phrases(reviews, top_n=10):
+    """
+    Extract the top N most frequent words and phrases from a user's reviews.
+    """
+    stopwords_list = list(stop_words.STOP_WORDS)
+
+    stopwords_java_list = Arrays.asList(stopwords_list)
+    stopwords_set = CharArraySet(stopwords_java_list, True) 
+
+    analyzer = StandardAnalyzer(stopwords_set)
+    token_count = Counter()
+    phrase_count = Counter()
+
+    for review in reviews:
+        text = review["review_text"]
+        token_stream = analyzer.tokenStream("review_text", text)
+        token_stream.reset()
+
+        terms = []
+        while token_stream.incrementToken():
+            term = token_stream.getAttribute(CharTermAttribute.class_).toString()
+            terms.append(term)
+            token_count[term] += 1
+
+        token_stream.end()
+        token_stream.close()
+
+        # Count two-word phrases for simplicity
+        phrases = [" ".join(terms[i:i+2]) for i in range(len(terms)-1)]
+        phrase_count.update(phrases)
+
+    return {
+        "top_words": token_count.most_common(top_n),
+        "top_phrases": phrase_count.most_common(top_n),
+    }
+
+def get_representative_sentences(reviews, top_n=3):
+    """
+    Extract representative sentences from the user's reviews.
+    """
+    all_sentences = []
+    for review in reviews:
+        sentences = review["review_text"].split(".")
+        all_sentences.extend(sentences)
+
+    # Use a simple approach to select "representative" sentences based on length and common terms
+    ranked_sentences = sorted(all_sentences, key=lambda s: len(s.split()), reverse=True)
+    return ranked_sentences[:top_n]
+
+def generate_user_review_summary(searcher, user_id):
+    """
+    Generate a summary of reviews for a specific user.
+    """
+    reviews = get_reviews_by_user(searcher, user_id)
+    if not reviews:
+        print(f"No reviews found for user ID: {user_id}")
+        return
+
+    # Number of reviews
+    num_reviews = len(reviews)
+    print(f"User {user_id} has contributed {num_reviews} reviews.")
+
+    # Bounding box
+    bounding_box = calculate_bounding_box(reviews)
+    if bounding_box:
+        print("User's review activity bounding box:")
+        print(f"Latitude min: {bounding_box['lat_min']}, max: {bounding_box['lat_max']}")
+        print(f"Longitude min: {bounding_box['lon_min']}, max: {bounding_box['lon_max']}")
+    else:
+        print("No geolocation data available for bounding box calculation.")
+
+    # Top words and phrases
+    top_words_phrases = get_top_words_and_phrases(reviews)
+    print("Top 10 words:")
+    for word, count in top_words_phrases["top_words"]:
+        print(f"{word}: {count}")
+
+    print("\nTop 10 phrases:")
+    for phrase, count in top_words_phrases["top_phrases"]:
+        print(f"{phrase}: {count}")
+
+    # Representative sentences
+    representative_sentences = get_representative_sentences(reviews)
+    print("\nRepresentative sentences:")
+    for sentence in representative_sentences:
+        print(f"- {sentence.strip()}")
+
 def print_search_results(hits, searcher, search_type):
     """
     Prints search results in a more informative manner, including star distribution and other details.
@@ -353,20 +530,29 @@ def terminal_ui(searcher):
         print("1. Search by Business Name")
         print("2. Search by Review Text")
         print("3. Geospatial Search (Bounding Box)")
-        print("4. Exit")
-        choice = input("Enter the type of search you want (1-4): ")
+        print("4. User Review Summary")
+        print("5. Distribution of reviews contributed by the users")
+        print("6. Exit")
+        choice = input("Enter the type of search you want (1-6): ")
     
-        if not choice.isdigit() or not (1 <= int(choice) <= 4):
-            print("Invalid choice. Please enter a number between 1 and 4.")
+        if not choice.isdigit() or not (1 <= int(choice) <= 6):
+            print("Invalid choice. Please enter a number between 1 and 6.")
             continue
 
         choice = int(choice)
 
-        if choice == 4:
+        if choice == 6:
             print("Exiting...")
             break
 
-        while True:
+        elif choice == 4:
+            user_id = input("Enter the user ID: ").strip()
+            generate_user_review_summary(searcher, user_id)
+
+        elif choice == 5:
+            plot_user_review_distribution(searcher)
+
+        while True and choice < 4:
             try:
                 N = int(input("Enter the number of results you want (N): "))
                 if N <= 0:
@@ -429,7 +615,6 @@ def terminal_ui(searcher):
                 print("Invalid input for latitude or longitude. Please try again.")
             except Exception as e:
                 print(f"Error during search: {e}")
-        
 
 
 if __name__ == "__main__":
