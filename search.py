@@ -43,7 +43,7 @@ def calculate_log_weight(value):
     """
     Calculates a log-based weight for a given value.
     """
-    return 1 + log10(value) if value > 0 else 1
+    return 1 + log10(value) if value > 0 else 0
 
 def search_by_business_name(searcher, query_string, N):
     """
