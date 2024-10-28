@@ -1,20 +1,22 @@
 import lucene
 import time
 import math
-from math import log10
+from math import log10, log
 from collections import Counter
 from spacy.lang.en import stop_words
 from org.apache.lucene.analysis.tokenattributes import CharTermAttribute
 from org.apache.lucene.store import FSDirectory
-from org.apache.lucene.index import DirectoryReader, Term
+from org.apache.lucene.index import DirectoryReader, Term, IndexWriter, IndexWriterConfig
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.analysis.en import EnglishAnalyzer
 from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import TermQuery, IndexSearcher, BooleanQuery, BooleanClause
-from org.apache.lucene.document import DoublePoint
+from org.apache.lucene.document import DoublePoint, StringField, Document
 from org.apache.lucene.analysis import CharArraySet
 from java.util import Arrays
 from java.nio.file import Paths
+import shutil
+import os
 import matplotlib.pyplot as plt
 
 # Initialize the Lucene JVM
@@ -373,16 +375,19 @@ def plot_user_review_distribution(searcher):
 
     # Prepare data for plotting
     review_frequency = Counter(review_counts.values())
+    print(review_frequency)
+
     x = list(review_frequency.keys())
     y = list(review_frequency.values())
 
+    y_log = [math.log(y_val) for y_val in y]
+
     plt.figure(figsize=(10, 5))
-    plt.scatter(x, y, marker='o')  # Scatter plot to avoid line connections
+    plt.bar(x, y_log, label="Log Smoothed")  # Scatter plot to avoid line connections
     plt.xlabel('Number of Reviews')
-    plt.ylabel('Number of Users')
+    plt.ylabel('Number of Users (Log Smoothed)')
     plt.title('User Review Contribution Distribution')
     plt.grid(True)
-
     plt.show()
 
 def calculate_bounding_box(reviews):
@@ -446,9 +451,97 @@ def get_representative_sentences(reviews, top_n=3):
         sentences = review["review_text"].split(".")
         all_sentences.extend(sentences)
 
-    # Use a simple approach to select "representative" sentences based on length and common terms
-    ranked_sentences = sorted(all_sentences, key=lambda s: len(s.split()), reverse=True)
-    return ranked_sentences[:top_n]
+    index_user_documents("index_temp_user", all_sentences)
+
+    tf_idf_vectors = calculate_tfidf("index_temp_user")
+
+    sentence_num_sim = {}
+    for sentence in tf_idf_vectors.keys():
+        count = 0
+        target_vector = tf_idf_vectors[sentence]
+
+        for vector in tf_idf_vectors.values():
+            similarity = cosine_similarity(target_vector, vector)
+            if similarity >= 0.7:
+                count += 1
+        
+        sentence_num_sim[sentence] = count
+
+    sorted_sentences = dict(sorted(sentence_num_sim.items(), key=lambda item: item[1]))
+    sorted_sentences.pop('')
+    top_3_sentences = list(sorted_sentences.keys())[:3]
+
+    shutil.rmtree("index_temp_user", ignore_errors=True)
+    return top_3_sentences
+
+def index_user_documents(index_dir, documents):
+
+    # Create the index directory
+    if not os.path.exists(index_dir):
+        os.makedirs(index_dir)
+
+    # Set up index writer
+    index = FSDirectory.open(Paths.get(index_dir))
+    # index = FSDirectory.open(File(index_dir))
+    analyzer = StandardAnalyzer()
+    config = IndexWriterConfig(analyzer)
+    writer = IndexWriter(index, config)
+
+    # Add documents to the index
+    for doc_id, content in enumerate(documents):
+        doc = Document()
+        doc.add(StringField("id", str(doc_id), StringField.Store.YES))
+        doc.add(StringField("content", content, StringField.Store.YES))
+        writer.addDocument(doc)
+
+    writer.close()
+
+def calculate_tfidf(index_dir):
+    index = FSDirectory.open(Paths.get(index_dir))
+    reader = DirectoryReader.open(index)
+
+    # Total number of documents
+    total_docs = reader.numDocs()
+    doc_tfidf = {}
+
+    for doc_id in range(total_docs):
+        doc = reader.document(doc_id)
+        terms = doc.getField("content").stringValue().split()  # Split into terms
+
+        tf = {}
+        for term in terms:
+            tf[term] = tf.get(term, 0) + 1  # Term Frequency
+
+        # Calculate TF-IDF
+        tfidf_vector = {}
+        for term, frequency in tf.items():
+            # Calculate term frequency
+            tf_value = frequency / len(terms)
+
+            # Calculate document frequency
+            term_docs = reader.docFreq(Term("content", term))
+            idf_value = log(total_docs / (1 + term_docs))  # Using log smoothing
+
+            # TF-IDF calculation
+            tfidf_vector[term] = tf_value * idf_value
+
+        
+        doc_tfidf[doc.getField("content").stringValue()] = tfidf_vector
+
+    return doc_tfidf
+
+def cosine_similarity(vec1_dict, vec2_dict):
+    vec1 = list(vec1_dict.values())
+    vec2 = list(vec2_dict.values())
+    
+    dot = sum(vec1 * vec2 for vec1, vec2 in zip(vec1, vec2))
+    mag1 = math.sqrt(sum(a ** 2 for a in vec1))
+    mag2 = math.sqrt(sum(a ** 2 for a in vec2))
+    
+    if mag1 == 0 or mag2 == 0:  # Handle zero magnitude vectors
+        return 0.0
+    
+    return dot / (mag1 * mag2)
 
 def generate_user_review_summary(searcher, user_id):
     """
@@ -509,6 +602,7 @@ def print_search_results(hits, searcher, search_type):
             print(f"Postal Code: {result['postal_code']}")
         
         if search_type == "review":
+            print(f"Review ID: {result['review_id']}")
             print(f"Review Text: {result['review_text']}")
             print(f"Useful: {result['useful']}, Funny: {result['funny']}, Cool: {result['cool']}")
         

@@ -4,7 +4,7 @@ import os
 import time
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import IndexWriter, IndexWriterConfig
-from org.apache.lucene.document import Document, StringField, TextField, DoubleField, IntField
+from org.apache.lucene.document import Document, StringField, TextField, DoubleField, IntField, Field
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from java.nio.file import Paths
 
