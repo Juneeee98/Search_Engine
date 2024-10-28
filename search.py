@@ -42,7 +42,7 @@ def calculate_log_weight(value):
     """
     Calculates a log-based weight for a given value.
     """
-    return 1 + log10(value) if value > 0 else 0
+    return 1 + log10(value) if value > 0 else 1
 
 def search_by_business_name(searcher, query_string, N):
     """
@@ -93,7 +93,7 @@ def search_by_business_name(searcher, query_string, N):
         log_review_count_weight = calculate_log_weight(review_count)
 
         # Adjust score based on logarithmic scaling of stars and review count
-        adjusted_score = score * (1 + (log_star_weight * log_review_count_weight))
+        adjusted_score = score * (1 + (log_star_weight + log_review_count_weight) / 10)
 
         result = {
             "business_id": business_id,
@@ -204,9 +204,7 @@ def search_by_review_text_with_business(searcher, query_string, N):
         log_star_weight = calculate_log_weight(stars)
 
         # Custom scoring with log-transformed weights
-        adjusted_score = score * (
-            1 + log_useful_weight / 10.0 + log_cool_weight / 10.0 + log_funny_weight / 10.0
-        ) * log_star_weight
+        adjusted_score = score * (1 + (log_useful_weight + log_cool_weight + log_funny_weight + log_star_weight) / 10 )
 
         result = {
             "business_id": business_id,
@@ -602,6 +600,7 @@ def print_search_results(hits, searcher, search_type):
             print(f"Postal Code: {result['postal_code']}")
         
         if search_type == "review":
+            print(f"Stars: {result['stars']}")
             print(f"Review ID: {result['review_id']}")
             print(f"Review Text: {result['review_text']}")
             print(f"Useful: {result['useful']}, Funny: {result['funny']}, Cool: {result['cool']}")
