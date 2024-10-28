@@ -17,6 +17,7 @@ from java.util import Arrays
 from java.nio.file import Paths
 import shutil
 import os
+import re
 import matplotlib.pyplot as plt
 
 # Initialize the Lucene JVM
@@ -460,14 +461,21 @@ def get_representative_sentences(reviews, top_n=3):
 
         for vector in tf_idf_vectors.values():
             similarity = cosine_similarity(target_vector, vector)
-            if similarity >= 0.7:
+            if similarity >= 0.9:
                 count += 1
         
         sentence_num_sim[sentence] = count
 
     sorted_sentences = dict(sorted(sentence_num_sim.items(), key=lambda item: item[1]))
     sorted_sentences.pop('')
-    top_3_sentences = list(sorted_sentences.keys())[:3]
+
+    # Filter out sentences that contain only numbers
+    top_sentences = [s for s in sorted_sentences.keys() if not re.fullmatch(r'\d+', s.strip())]
+    top_3_sentences = top_sentences[:3]
+    
+    # Add a message if fewer than `top_n` sentences are available
+    if len(top_3_sentences) < 3:
+        top_3_sentences.append("No more sentences for this review")
 
     shutil.rmtree("index_temp_user", ignore_errors=True)
     return top_3_sentences
