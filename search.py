@@ -93,7 +93,7 @@ def search_by_business_name(searcher, query_string, N):
         log_review_count_weight = calculate_log_weight(review_count)
 
         # Adjust score based on logarithmic scaling of stars and review count
-        adjusted_score = score * log_star_weight * log_review_count_weight
+        adjusted_score = score * (1 + (log_star_weight * log_review_count_weight))
 
         result = {
             "business_id": business_id,
