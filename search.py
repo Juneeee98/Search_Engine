@@ -173,6 +173,7 @@ def search_by_review_text_with_business(searcher, query_string, N):
         doc = searcher.doc(hit.doc)
         review_id = doc.get("review_id")  # Assuming review_id is unique for each review
         business_id = doc.get("business_id")
+        user_id = doc.get("user_id")
         
         # Skip duplicates based on review_id
         if review_id in seen_review_ids:
@@ -209,6 +210,7 @@ def search_by_review_text_with_business(searcher, query_string, N):
         result = {
             "business_id": business_id,
             "review_id": review_id,  # Adding review_id to track unique results
+            "user_id": user_id,
             "name": business_name,
             "review_text": review_text,
             "useful": useful,
@@ -608,6 +610,7 @@ def print_search_results(hits, searcher, search_type):
         
         if search_type == "review":
             print(f"Stars: {result['stars']}")
+            print(f"User ID: {result['user_id']}")
             print(f"Review ID: {result['review_id']}")
             print(f"Review Text: {result['review_text']}")
             print(f"Useful: {result['useful']}, Funny: {result['funny']}, Cool: {result['cool']}")
