@@ -667,6 +667,9 @@ def get_cluster(cluster, searcher, top_n):
 
 
 def random_business_cluster_reco(searcher, n_biz):
+    '''
+    Randomly select a cluster
+    '''
     reader = searcher.getIndexReader()
     n = reader.maxDoc()
     query = TermQuery(Term('doc_type', 'cluster'))
@@ -683,6 +686,9 @@ def random_business_cluster_reco(searcher, n_biz):
     return reco, cl
 
 def common_cluster_reco(hits,n_sim, searcher):
+    '''
+    Filter businesses by the cluster of the businesses in hits, while omitted those seen businesses
+    '''
     reader = searcher.getIndexReader()
     n_hits = len(hits)
     n_candidates = 0
@@ -714,6 +720,11 @@ def common_cluster_reco(hits,n_sim, searcher):
 
 
 def business_reco(hits, n_sim, searcher):
+    '''
+    Recommend businesses.
+    If there have been previously viewed businesses (business by name task) , pick from those clusters
+    Otherwise, randomly pick a cluster
+    '''
     candidates = None
     original_docs = None
     if not hits:
@@ -730,6 +741,9 @@ def business_reco(hits, n_sim, searcher):
     return reco, original_docs
 
 def print_recommendations(reco_out, n):
+    '''
+    Format output for application task
+    '''
     reco, orig = reco_out
     
     if orig:
