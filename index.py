@@ -8,8 +8,6 @@ from org.apache.lucene.document import Document, StringField, TextField, DoubleF
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from java.nio.file import Paths
 
-# Initialize the Lucene JVM
-lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 
 def index_business_data(writer, business_data, business_map):
     """
@@ -20,12 +18,15 @@ def index_business_data(writer, business_data, business_map):
     # Add basic fields with safe default values
     business_id = business_data.get("business_id", "")
     business_name = business_data.get("name", "Unknown Business")
+    business_categories = business_data.get("categories") or ""
     
     # Populate the business_map
     business_map[business_id] = business_name
     
+    doc.add(StringField('doc_type', 'business', StringField.Store.YES))
     doc.add(StringField("business_id", business_id, StringField.Store.YES))
     doc.add(TextField("name", business_name, TextField.Store.YES))
+    doc.add(TextField("categories", business_categories, TextField.Store.YES))
     doc.add(TextField("address", business_data.get("address", ""), TextField.Store.YES))
     doc.add(TextField("city", business_data.get("city", ""), TextField.Store.YES))
     doc.add(StringField("state", business_data.get("state", ""), StringField.Store.YES))
@@ -39,11 +40,6 @@ def index_business_data(writer, business_data, business_map):
     doc.add(DoubleField("stars", float(business_data.get("stars", 0.0)), DoubleField.Store.YES))
     doc.add(IntField("review_count", int(business_data.get("review_count", 0)), IntField.Store.YES))
     
-    # remove categories as it is not used, can uncomment if needed for recommendation system
-    # Check if categories field exists and is not None or empty
-    # categories = business_data.get("categories")
-    # if categories:
-    #     doc.add(TextField("categories", categories, TextField.Store.YES))
 
     # Index the document
     writer.addDocument(doc)
@@ -56,6 +52,7 @@ def index_review_data(writer, review_data):
 
     # Link review to business by business_id
     business_id = review_data.get("business_id", "")
+    doc.add(StringField('doc_type', 'review', StringField.Store.YES))
     doc.add(StringField("business_id", business_id, StringField.Store.YES))
 
     # Add the rest of the review fields
@@ -219,6 +216,9 @@ def filter_dataset_by_state(json_directory="./dataset", state="ID"):
     print(f"Filtered review data saved to {filtered_review_file_path}")
 
 if __name__ == "__main__":
+    # Initialize the Lucene JVM
+    lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+
     # Define the paths
     index_directory = "./index"  # Where your index will be stored
     business_json_file = "./dataset/yelp_academic_dataset_business.json"  # Path to business data
