@@ -1,12 +1,13 @@
 import lucene
 import time
 import math
+import numpy as np
 from math import log10, log
 from collections import Counter
 from spacy.lang.en import stop_words
 from org.apache.lucene.analysis.tokenattributes import CharTermAttribute
 from org.apache.lucene.store import FSDirectory
-from org.apache.lucene.index import DirectoryReader, Term, IndexWriter, IndexWriterConfig
+from org.apache.lucene.index import MultiReader, DirectoryReader, Term, IndexWriter, IndexWriterConfig
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.analysis.en import EnglishAnalyzer
 from org.apache.lucene.queryparser.classic import QueryParser
@@ -20,8 +21,6 @@ import os
 import re
 import matplotlib.pyplot as plt
 
-# Initialize the Lucene JVM
-lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     """
@@ -622,30 +621,194 @@ def print_search_results(hits, searcher, search_type):
         print(f"Adjusted Score: {result.get('score', result['adjusted_score']):.10f}")
         print("-" * 40)
 
+def get_business(bid, searcher):
+    reader = searcher.getIndexReader()
+
+    bool_query = BooleanQuery.Builder()
+    doctype_business = TermQuery(Term('doc_type', 'business'))
+    doctype_cluster = TermQuery(Term('doc_type', 'cluster'))
+    query_bid = TermQuery(Term('business_id', bid))
+    bool_query.add(doctype_business, BooleanClause.Occur.SHOULD)
+    bool_query.add(doctype_cluster, BooleanClause.Occur.SHOULD)
+    bool_query.add(query_bid, BooleanClause.Occur.MUST)
+    query = bool_query.build()
+    hits = searcher.search(query, 2)
+
+    pri, cluster, cluster_size = None, None, None
+    for hit in hits.scoreDocs:
+        doc = reader.document(hit.doc)
+        if doc.get('doc_type') == 'business':
+            pri = doc
+        else:
+            cluster = doc.get('cluster')
+            term = Term('cluster', cluster)
+            cluster_size = reader.docFreq(term)
+    return pri, cluster, cluster_size
+
+def get_cluster(cluster, searcher, top_n):
+    reader = searcher.getIndexReader()
+    bool_query = BooleanQuery.Builder()
+    cluster_term = Term('cluster', cluster)
+    doctype_qry = TermQuery(Term('doc_type', 'cluster'))
+    cluster_qry = TermQuery(cluster_term)
+    bool_query.add(doctype_qry, BooleanClause.Occur.MUST)
+    bool_query.add(cluster_qry, BooleanClause.Occur.MUST)
+    query = bool_query.build()
+    n = reader.docFreq(cluster_term)
+    hits = searcher.search(query,n)
+    docs = []
+    for hit in hits.scoreDocs:
+        doc = reader.document(hit.doc)
+        bid = doc.get('business_id')
+        doc = get_business(bid, searcher)[0]
+        docs.append(doc)
+    docs = np.array(docs)
+    return docs
+
+
+def random_business_cluster_reco(searcher, n_biz):
+    reader = searcher.getIndexReader()
+    n = reader.maxDoc()
+    query = TermQuery(Term('doc_type', 'cluster'))
+    hits = searcher.search(query, n)
+    clusters = set()
+    for hit in hits.scoreDocs:
+        doc = reader.document(hit.doc)
+        cluster = doc.get('cluster')
+        clusters.add(cluster)
+    clusters = list(clusters)
+    n = len(clusters)
+    cl = str(int(np.random.choice(n)))
+    reco = get_cluster(cl, searcher, n_biz)
+    return reco, cl
+
+def common_cluster_reco(hits,n_sim, searcher):
+    reader = searcher.getIndexReader()
+    n_hits = len(hits)
+    n_candidates = 0
+    bool_query = BooleanQuery.Builder()
+    bool_query.add(TermQuery(Term('doc_type', 'cluster')), BooleanClause.Occur.MUST)
+
+    original_docs = []
+
+    for hit in hits:
+        bid = hit['business_id']
+        doc, cluster, cluster_size = get_business(bid, searcher)
+        original_docs.append(doc)
+        n_candidates += cluster_size
+        bool_query.add(TermQuery(Term('cluster', cluster)), BooleanClause.Occur.SHOULD)
+        bool_query.add(TermQuery(Term('business_id', bid)), BooleanClause.Occur.MUST_NOT)
+
+    query = bool_query.build() 
+    hits = searcher.search(query, n_candidates)
+
+    candidates = []
+
+    for hit in hits.scoreDocs:
+        doc = reader.document(hit.doc)
+        candidates.append(doc.get('business_id'))
+   
+    candidates = np.array([get_business(bid, searcher)[0] for bid in candidates])
+    orignal_docs = np.array(original_docs)
+    return candidates, original_docs
+
+
+def business_reco(hits, n_sim, searcher):
+    candidates = None
+    original_docs = None
+    if not hits:
+        reco, cl = random_business_cluster_reco(searcher, n_sim)
+        candidates = reco
+    else:
+        reco, original_docs = common_cluster_reco(hits,n_sim, searcher)
+        candidates = reco
+     
+    rating = np.array([float(doc.get('stars')) for doc in candidates])
+    top_n = np.argsort(-rating)[:n_sim]
+    reco = candidates[top_n].tolist() 
+
+    return reco, original_docs
+
+def print_recommendations(reco_out, n):
+    reco, orig = reco_out
+    
+    if orig:
+        print("-" * 40)
+        print('Because you looked at:')
+        print("-" * 40)
+        for doc in orig:
+            print(doc.get('name'))
+            print(doc.get('categories'))
+            print(doc.get('stars'))
+            print(doc.get('address'))
+            print("-" * 40)
+    else:
+        print("-" * 40)
+    print('Maybe consider paying a visit to:')
+    print("-" * 40)
+    for i, doc in enumerate(reco):
+        print(f'{i} / {n}')
+        print(doc.get('name'))
+        print(doc.get('categories'))
+        print(doc.get('stars'))
+        print(doc.get('address'))
+        print("-" * 40)
+
+    print('End of Results')
+    print("-" * 40)
+
+
+def prompt_for_N():
+    while True:
+        try:
+            N = int(input("Enter the number of results you want (N): "))
+            if N <= 0:
+                print("Number of results must be a positive integer. Please try again.")
+                continue  # Prompt again for a positive integer
+            return N # Exit the loop if N is valid
+        except ValueError:
+            print("Invalid input. Please enter a positive integer for the number of results.")
+            # continue is not necessary here; it will loop back automatically
+
 def terminal_ui(searcher):
     """
     Terminal UI for selecting the type of search and interacting with the search engine.
     """
+    choices = [
+        "1. Search by Business Name",
+        "2. Search by Review Text",
+        "3. Geospatial Search (Bounding Box)",
+        "4. User Review Summary",
+        "5. Distribution of reviews contributed by the users",
+        "6. Recommend Similar Businesses",
+        "7. Exit"
+    ]
+   
+    last_business_hits = None
+
     while True:
         print("\nSearch Options:")
-        print("1. Search by Business Name")
-        print("2. Search by Review Text")
-        print("3. Geospatial Search (Bounding Box)")
-        print("4. User Review Summary")
-        print("5. Distribution of reviews contributed by the users")
-        print("6. Exit")
-        choice = input("Enter the type of search you want (1-6): ")
+        num_choices = len(choices) 
+        for choice in choices:
+            print(choice)
+        choice = input(f"Enter the type of search you want (1-{num_choices}): ")
     
-        if not choice.isdigit() or not (1 <= int(choice) <= 6):
-            print("Invalid choice. Please enter a number between 1 and 6.")
+        if not choice.isdigit() or not (1 <= int(choice) <= num_choices):
+            print(f"Invalid choice. Please enter a number between 1 and {num_choices}.")
             continue
 
         choice = int(choice)
 
-        if choice == 6:
+        if choice == num_choices:
             print("Exiting...")
             break
-
+        
+        elif choice == 6:
+            N = prompt_for_N()
+            hits = last_business_hits
+            reco_out = business_reco(hits, N, searcher)
+            print_recommendations(reco_out, N)
+            
         elif choice == 4:
             user_id = input("Enter the user ID: ").strip()
             generate_user_review_summary(searcher, user_id)
@@ -653,18 +816,8 @@ def terminal_ui(searcher):
         elif choice == 5:
             plot_user_review_distribution(searcher)
 
-        while True and choice < 4:
-            try:
-                N = int(input("Enter the number of results you want (N): "))
-                if N <= 0:
-                    print("Number of results must be a positive integer. Please try again.")
-                    continue  # Prompt again for a positive integer
-                break  # Exit the loop if N is valid
-            except ValueError:
-                print("Invalid input. Please enter a positive integer for the number of results.")
-                # continue is not necessary here; it will loop back automatically
-
-        if choice == 1:
+        elif choice == 1:
+            N = prompt_for_N()
             business_name = input("Enter the business name: ").strip()
             if len(business_name) == 0:
                 print("Business name cannot be empty. Please enter a valid business name.")
@@ -673,10 +826,12 @@ def terminal_ui(searcher):
                 print("Business name is too short. Please enter at least 3 characters.")
                 continue
             hits = search_by_business_name(searcher, business_name, N)
+            last_business_hits = hits
             print_search_results(hits, searcher, "business") if hits else print("No results found for this business name.")
             
             
         elif choice == 2:
+            N = prompt_for_N()
             review_text = input("Enter the review text: ").strip()
             if len(review_text) == 0:
                 print("Review text cannot be empty. Please enter valid text.")
@@ -688,6 +843,7 @@ def terminal_ui(searcher):
             print_search_results(hits, searcher, "review") if hits else print("No reviews found matching this text.")
 
         elif choice == 3:
+            N = prompt_for_N()
             try:
                 # Input and validate latitude and longitude ranges
                 lat_min = float(input("Enter minimum latitude: "))
@@ -719,11 +875,17 @@ def terminal_ui(searcher):
 
 
 if __name__ == "__main__":
+    # Initialize the Lucene JVM
+    lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+
     # Define the path to the index directory
     index_directory = "./index"
-
+    secondary_index_directory = "./secondary_index"
     # Open the index directory
-    searcher = IndexSearcher(DirectoryReader.open(FSDirectory.open(Paths.get(index_directory))))
+    reader = DirectoryReader.open(FSDirectory.open(Paths.get(index_directory)))
+    secondary_reader = DirectoryReader.open(FSDirectory.open(Paths.get(secondary_index_directory)))
+    reader = MultiReader([reader, secondary_reader])
+    searcher = IndexSearcher(reader)
 
     # Start the terminal UI for searching
     terminal_ui(searcher)
