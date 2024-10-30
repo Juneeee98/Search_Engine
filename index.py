@@ -2,6 +2,7 @@ import json
 import lucene
 import os
 import time
+from utils import get_parameters
 from org.apache.lucene.store import FSDirectory
 from org.apache.lucene.index import IndexWriter, IndexWriterConfig
 from org.apache.lucene.document import Document, StringField, TextField, DoubleField, IntField, Field
@@ -220,7 +221,7 @@ if __name__ == "__main__":
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
     
     parameter_file = './parameters.json'
-    parameters = json.load(open(parameter_file, 'r'))
+    parameters = get_parameters(parameter_file)
 
     # Define the paths
     index_directory = parameters.get('INDEX.PRIMARY', "./index")  # Where your index will be stored

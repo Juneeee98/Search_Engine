@@ -1,0 +1,51 @@
+import json
+
+def validate_parameters(parameters):
+    return True
+
+def default_parameters():
+    default = {
+        "INDEX.PRIMARY": "./index",
+        "INDEX.SECONDARY": "./secondary_index",
+        
+        "DATA.ROOT": "./dataset",
+        "DATA.BUSINESS": "yelp_academic_dataset_business.json",
+        "DATA.REVIEW": "yelp_academic_dataset_review.json",
+        "DATA.SUBSET": "ID",
+        "DATA.SUBSET_BUSINESS": "id_business.json",
+        "DATA.SUBSET_REVIEW": "id_review.json",
+
+        "SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS" : 1000,
+        "SEARCH.BUSINESS.MIN_LEN" : 3,
+        "SEARCH.REVIEW.MIN_LEN" : 3,
+        "SEARCH.REVIEW.FEATURE_WEIGHTS_USEFUL" : 1.0,
+        "SEARCH.REVIEW.FEATURE_WEIGHTS_FUNNY" : 0.5,
+        "SEARCH.REVIEW.FEATURE_WEIGHTS_COOL" : 0.2,
+        "SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH" : 0.9,
+        "SEARCH.SUMMARY.MAX_REVIEWS" : 10000,
+        
+        "KMEANS.N_CLUSTERS": 50,
+        "KMEANS.RANDOM_SEED": 42,
+        "TSVD.N_COMPONENTS": 200,
+        "TSVD.N_ITERATIONS": 20,
+        "TSVD.RANDOM_SEED": 42,
+
+        "SEARCH.APPLICATION.HISTORY_MAX_LEN" : 10
+    }
+    return dict(default)
+    
+
+def get_parameters(path):
+    try:
+        with open(path, 'r') as file:
+            parameters = json.load(path)
+            valid = validate_parameters(parameters)
+            if valid:
+                return parameters
+            else:
+                print("Invalid parameters found: Using default parameters")
+                return default_parameters()
+    except: 
+        print("Error occured while attemping to load parameters: Using default parameters")
+        return default_parameters()
+

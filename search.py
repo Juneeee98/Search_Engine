@@ -17,6 +17,7 @@ from org.apache.lucene.document import DoublePoint, StringField, Document
 from org.apache.lucene.analysis import CharArraySet
 from java.util import Arrays
 from java.nio.file import Paths
+from utils import get_parameters
 import shutil
 import os
 import re
@@ -810,7 +811,7 @@ def terminal_ui(searcher, parameters):
     last_business_hits = []
     history_max_length = parameters.get('SEARCH.APPLICATION.HISTORY_MAX_LEN')
     business_search_minimum_length = parameters.get('SEARCH.BUSINESS.MIN_LEN') 
-    max_business_results = parameters.get('SEARCH.BUSINESS.MAX_RESULTS') 
+    max_business_results = parameters.get('SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS') 
     review_search_minimum_length = parameters.get('SEARCH.REVIEW.MIN_LEN')
     user_summary_similarity_threshold = parameters.get('SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH')
     user_summary_max_reviews = parameters.get('SEARCH.SUMMARY.MAX_REVIEWS')
@@ -915,8 +916,8 @@ if __name__ == "__main__":
     
     # Parameter File
     param_file = './parameters.json'
-    parameters = json.load(open(search_param_file, 'r'))
-
+    parameters = get_parameters(param_file)
+    
     # Define the path to the index directory
     index_directory = parameters.get('INDEX.PRIMARY', './index')
     secondary_index_directory = parameters.get('INDEX.SECONDARY', './secondary_index')
@@ -930,7 +931,6 @@ if __name__ == "__main__":
     )
     reader = MultiReader([reader, secondary_reader])
     searcher = IndexSearcher(reader)
-    
 
     # Start the terminal UI for searching
     terminal_ui(searcher, parameters)

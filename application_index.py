@@ -1,7 +1,7 @@
 import lucene
 import time
-import json
 import numpy as np
+from utils import get_parameters
 
 from index import get_directory_size
 
@@ -95,8 +95,8 @@ if __name__ == "__main__":
 
     # Define the paths
     parameter_path = './parameters.json'
-    
-    parameters = json.load(open(parameter_path, 'r'))
+    parameters = get_parameters(parameter_path)
+
     index_directory = parameters.get('INDEX.PRIMARY', './index')
     secondary_index_directory = parameters.get('INDEX.SECONDARY', './secondary_index')
 
