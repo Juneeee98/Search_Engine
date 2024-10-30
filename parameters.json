@@ -1,10 +1,5 @@
 {
-    "INDEX.PRIMARY": "./index",
-    "INDEX.SECONDARY": "./secondary_index",
-    
     "DATA.ROOT": "./dataset",
-    "DATA.BUSINESS": "yelp_academic_dataset_business.json",
-    "DATA.REVIEW": "yelp_academic_dataset_review.json",
     "DATA.SUBSET": "ID",
     "DATA.SUBSET_BUSINESS": "id_business.json",
     "DATA.SUBSET_REVIEW": "id_review.json",
