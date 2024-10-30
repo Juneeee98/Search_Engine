@@ -44,7 +44,7 @@ def calculate_log_weight(value):
     """
     return 1 + log10(value) if value > 0 else 0
 
-def search_by_business_name(searcher, query_string, N):
+def search_by_business_name(searcher, query_string, N, max_results):
     """
     Searches for businesses by their name and provides star distribution for each result.
     Custom scoring is applied based on star ratings and review count.
@@ -64,7 +64,7 @@ def search_by_business_name(searcher, query_string, N):
         max_freq = max(max_freq, searcher.getIndexReader().docFreq(term_query))
 
     # Set max_results based on frequency; higher frequency terms lead to higher max_results
-    max_results = max(N, min(1000, N * max(1, max_freq // 10)))
+    max_results = max(N, min(max_results, N * max(1, max_freq // 10)))
 
     hits = searcher.search(query, max_results)
 
@@ -121,7 +121,7 @@ def search_by_business_name(searcher, query_string, N):
 
     return results[:N]
 
-def search_by_review_text_with_business(searcher, query_string, N):
+def search_by_review_text_with_business(searcher, query_string, N, feature_weights):
     """
     Searches for reviews by keywords in the review text and retrieves associated business names.
     Custom scoring is applied based on keyword relevance, usefulness, coolness, funniness, and business ratings.
@@ -165,9 +165,9 @@ def search_by_review_text_with_business(searcher, query_string, N):
     seen_review_ids = set()
 
     # Define weights for useful, cool, and funny votes
-    useful_weight = 1.0
-    cool_weight = 0.5
-    funny_weight = 0.2
+    useful_weight = feature_weights['useful'] # 1.0
+    cool_weight = feature_weights['cool'] # 0.5
+    funny_weight = feature_weights['funny'] # 0.2
 
     for hit in hits.scoreDocs:
         doc = searcher.doc(hit.doc)
@@ -317,12 +317,12 @@ def geospatial_search(searcher, lat_min, lat_max, lon_min, lon_max, N):
     # Return the top N results
     return results[:N]
 
-def get_reviews_by_user(searcher, user_id):
+def get_reviews_by_user(searcher, user_id, max_results):
     """
     Retrieve all reviews for a given user ID.
     """
     query = TermQuery(Term("user_id", user_id))
-    hits = searcher.search(query, 10000)  # Adjust the limit if needed
+    hits = searcher.search(query, max_results)  # Adjust the limit if needed
     reviews = []
     for hit in hits.scoreDocs:
         doc = searcher.doc(hit.doc)
@@ -442,7 +442,7 @@ def get_top_words_and_phrases(reviews, top_n=10):
         "top_phrases": phrase_count.most_common(top_n),
     }
 
-def get_representative_sentences(reviews, top_n=3):
+def get_representative_sentences(reviews, top_n=3, similaity_threshold=0.9):
     """
     Extract representative sentences from the user's reviews.
     """
@@ -462,7 +462,7 @@ def get_representative_sentences(reviews, top_n=3):
 
         for vector in tf_idf_vectors.values():
             similarity = cosine_similarity(target_vector, vector)
-            if similarity >= 0.9:
+            if similarity >= similarity_threshold:
                 count += 1
         
         sentence_num_sim[sentence] = count
@@ -550,11 +550,11 @@ def cosine_similarity(vec1_dict, vec2_dict):
     
     return dot / (mag1 * mag2)
 
-def generate_user_review_summary(searcher, user_id):
+def generate_user_review_summary(searcher, user_id, similarity_threshold, max_reviews):
     """
     Generate a summary of reviews for a specific user.
     """
-    reviews = get_reviews_by_user(searcher, user_id)
+    reviews = get_reviews_by_user(searcher, user_id, max_reviews)
     if not reviews:
         print(f"No reviews found for user ID: {user_id}")
         return
@@ -583,7 +583,7 @@ def generate_user_review_summary(searcher, user_id):
         print(f"{phrase}: {count}")
 
     # Representative sentences
-    representative_sentences = get_representative_sentences(reviews)
+    representative_sentences = get_representative_sentences(reviews, similarity_threshold)
     print("\nRepresentative sentences:")
     for sentence in representative_sentences:
         print(f"- {sentence.strip()}")
@@ -786,7 +786,13 @@ def prompt_for_N():
             print("Invalid input. Please enter a positive integer for the number of results.")
             # continue is not necessary here; it will loop back automatically
 
-def terminal_ui(searcher):
+
+def update_history(history, history_max_length, new_hits):
+    updated = [*history, *new_hits][-history_max_length:]
+    return updated
+    
+
+def terminal_ui(searcher, parameters):
     """
     Terminal UI for selecting the type of search and interacting with the search engine.
     """
@@ -800,7 +806,19 @@ def terminal_ui(searcher):
         "7. Exit"
     ]
    
-    last_business_hits = None
+    last_business_hits = []
+    history_max_length = parameters.get('APPLICATION.HISTORY_MAX_LEN')
+    business_search_minimum_length = parameters.get('SEARCH.BUSINESS.MIN_LEN') 
+    max_business_results = parameters.get('SEARCH.BUSINESS.MAX_RESULTS') 
+    review_search_minimum_length = parameters.get('SEARCH.REVIEW.MIN_LEN')
+    user_summary_similarity_threshold = parameters.get('SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH')
+    user_summary_max_reviews = parmaeters.get('SEARCH.SUMMARY.MAX_REVIEWS')
+    
+    review_feature_weights = {
+        'funny': parameters.get('SEARCH.REVIEW.FEATURE_WEIGHTS_FUNNY'),
+        'cool': parameters.get('SEARCH.REVIEW.FEATURE_WEIGHTS_COOL'),
+        'useful': parameters.get('SEARCH.REVIEW.FEATURE_WEIGHTS_USEFUL'),
+    }
 
     while True:
         print("\nSearch Options:")
@@ -827,7 +845,7 @@ def terminal_ui(searcher):
             
         elif choice == 4:
             user_id = input("Enter the user ID: ").strip()
-            generate_user_review_summary(searcher, user_id)
+            generate_user_review_summary(searcher, user_id, user_summary_similarity_threshold, user_summary_max_reviews)
 
         elif choice == 5:
             plot_user_review_distribution(searcher)
@@ -838,11 +856,11 @@ def terminal_ui(searcher):
             if len(business_name) == 0:
                 print("Business name cannot be empty. Please enter a valid business name.")
                 continue
-            elif len(business_name) < 3:
-                print("Business name is too short. Please enter at least 3 characters.")
+            elif len(business_name) < business_search_minimum_length :
+                print(f"Business name is too short. Please enter at least {business_search_minimum_length} characters.")
                 continue
-            hits = search_by_business_name(searcher, business_name, N)
-            last_business_hits = hits
+            hits = search_by_business_name(searcher, business_name, N, max_business_results)
+            last_business_hits = update_history(last_business_hits, history_max_length, hits)
             print_search_results(hits, searcher, "business") if hits else print("No results found for this business name.")
             
             
@@ -852,10 +870,10 @@ def terminal_ui(searcher):
             if len(review_text) == 0:
                 print("Review text cannot be empty. Please enter valid text.")
                 continue
-            elif len(review_text) < 3:
-                print("Review text is too short. Please enter at least 3 characters.")
+            elif len(review_text) < review_search_minimum_length :
+                print(f"Review text is too short. Please enter at least {review_search_minimum_length} characters.")
                 continue
-            hits = search_by_review_text_with_business(searcher, review_text, N)
+            hits = search_by_review_text_with_business(searcher, review_text, N, review_feature_weights)
             print_search_results(hits, searcher, "review") if hits else print("No reviews found matching this text.")
 
         elif choice == 3:
@@ -893,6 +911,17 @@ def terminal_ui(searcher):
 if __name__ == "__main__":
     # Initialize the Lucene JVM
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+    parameters = dict()
+
+    parameters['APPLICATION.HISTORY_MAX_LEN'] = 10
+    parameters['SEARCH.BUSINESS.MAX_RESULTS'] = 1000
+    parameters['SEARCH.BUSINESS.MIN_LEN'] = 3
+    parameters['SEARCH.REVIEW.MIN_LEN'] = 3
+    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_USEFUL'] = 1.0
+    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_FUNNY'] = 0.5
+    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_COOL'] = 0.2
+    parameters['SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH'] = .9
+    parmaeters['SEARCH.SUMMARY.MAX_REVIEWS'] = 10000
 
     # Define the path to the index directory
     index_directory = "./index"
@@ -908,4 +937,4 @@ if __name__ == "__main__":
     searcher = IndexSearcher(reader)
 
     # Start the terminal UI for searching
-    terminal_ui(searcher)
+    terminal_ui(searcher, parameters)
