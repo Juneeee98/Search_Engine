@@ -808,7 +808,7 @@ def terminal_ui(searcher, parameters):
     ]
    
     last_business_hits = []
-    history_max_length = parameters.get('APPLICATION.HISTORY_MAX_LEN')
+    history_max_length = parameters.get('SEARCH.APPLICATION.HISTORY_MAX_LEN')
     business_search_minimum_length = parameters.get('SEARCH.BUSINESS.MIN_LEN') 
     max_business_results = parameters.get('SEARCH.BUSINESS.MAX_RESULTS') 
     review_search_minimum_length = parameters.get('SEARCH.REVIEW.MIN_LEN')
