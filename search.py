@@ -681,7 +681,7 @@ def random_business_cluster_reco(searcher, n_biz):
     for hit in hits.scoreDocs:
         doc = reader.document(hit.doc)
         cluster_set.add(doc.get('cluster'))
-    chosen_cluster = str(int(np.random.choice(len(cluster_set)))
+    chosen_cluster = str(int(np.random.choice(len(cluster_set))))
     reco = get_cluster(chosen_cluster, searcher)
     return reco, chosen_cluster
 
