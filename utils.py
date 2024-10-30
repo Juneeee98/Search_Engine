@@ -1,12 +1,14 @@
 import json
 
-DEFAULT_PARAMETERS = {
-    "INDEX.PRIMARY": "./index",
-    "INDEX.SECONDARY": "./secondary_index",
-    
-    "DATA.ROOT": "./dataset",
+FIXED_PARAMETERS = {
     "DATA.BUSINESS": "yelp_academic_dataset_business.json",
     "DATA.REVIEW": "yelp_academic_dataset_review.json",
+    "INDEX.PRIMARY": "./index",
+    "INDEX.SECONDARY": "./secondary_index",
+}
+
+DEFAULT_PARAMETERS = {
+    "DATA.ROOT": "./dataset",
     "DATA.SUBSET": "ID",
     "DATA.SUBSET_BUSINESS": "id_business.json",
     "DATA.SUBSET_REVIEW": "id_review.json",
@@ -122,13 +124,21 @@ def validate_parameters(parameters):
     return True
 
 def default_parameters():
-    return dict(DEFAULT_PARAMETERS)
+    parameters = dict(DEFAULT_PARAMETERS)
+    parameters = add_fixed_parameters(parameters)
+    return parameters
+
+def add_fixed_parameters(parameters):
+    for key in FIXED_PARAMETERS:
+        parameters[key] = FIXED_PARAMETERS[key]
+    return parameters
 
 def get_parameters(path):
     try:
         with open(path, 'r') as file:
-            parameters = json.load(file)
-            valid = validate_parameters(parameters)
+            modifiable_parameters = json.load(file)
+            valid = validate_parameters(modifiable_parameters)
+            parameters = add_fixed_parameters(modifiable_parameters)
             if valid:
                 return parameters
             else:
