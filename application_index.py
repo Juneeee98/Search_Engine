@@ -19,27 +19,27 @@ from sklearn.pipeline import make_pipeline
 import numpy as np
 
 def cluster_businesses(searcher, tfidf_args, svd_args, norm_args, kmeans_args):
-    vectorizer = TfidfVectorizer(**tfidf_args)
+    tfidf_vectorizer = TfidfVectorizer(**tfidf_args)
     svd = TruncatedSVD(**svd_args)
     norm = Normalizer(**norm_args)
-    lsa = make_pipeline(vectorizer, svd, norm)
     kmeans = KMeans(**kmeans_args)
     
     reader = searcher.getIndexReader()
     n = reader.maxDoc()
+    query = TermQuery(Term('doc_type', 'business'))    
+    hits = searcher.search(query, n)
+    print(f'Extracting Features From {len(hits)} Documents.')
     bids = []
-    texts = []
-    for i in range(n):
-        doc = reader.document(i)
-        doc_type = doc.get('doc_type')
-        if doc_type != 'business':
-            continue
-        text = doc.get('name') + " " + doc.get('categories')
-        texts.append(text)
+    biz_features = []
+    for hit in hits:
+        doc = reader.document(hit.doc)
+        categories = doc.get('categories') or ""
+        name = doc.get('name')
+        biz_features.append(name + " " + categories)
         bids.append(doc.get('business_id'))
     
-    print(f'Extracting Features From {len(texts)} Documents.')
-    reduced = lsa.fit_transform(texts)
+    lsa = make_pipeline(tfidf_vectorizer, svd, norm)
+    reduced = lsa.fit_transform(biz_features)
     print('Predicting Clusters...', end='')
     clusters = kmeans.fit_predict(reduced)
     print(' Complete.')

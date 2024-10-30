@@ -648,7 +648,7 @@ def get_business(bid, searcher):
             cluster_size = reader.docFreq(term)
     return pri, cluster, cluster_size
 
-def get_cluster(cluster, searcher, top_n):
+def get_cluster(cluster, searcher):
     reader = searcher.getIndexReader()
     bool_query = BooleanQuery.Builder()
     cluster_term = Term('cluster', cluster)
@@ -677,42 +677,43 @@ def random_business_cluster_reco(searcher, n_biz):
     n = reader.maxDoc()
     query = TermQuery(Term('doc_type', 'cluster'))
     hits = searcher.search(query, n)
-    clusters = set()
+    cluster_set = set()
     for hit in hits.scoreDocs:
         doc = reader.document(hit.doc)
-        cluster = doc.get('cluster')
-        clusters.add(cluster)
-    clusters = list(clusters)
-    n = len(clusters)
-    cl = str(int(np.random.choice(n)))
-    reco = get_cluster(cl, searcher, n_biz)
-    return reco, cl
+        cluster_set.add(doc.get('cluster'))
+    chosen_cluster = str(int(np.random.choice(len(cluster_set)))
+    reco = get_cluster(chosen_cluster, searcher)
+    return reco, chosen_cluster
 
-def common_cluster_reco(hits,n_sim, searcher):
+def history_cluster_reco(history ,n_reco, searcher):
     '''
     Filter businesses by the cluster of the businesses in hits, while omitted those seen businesses
     '''
     reader = searcher.getIndexReader()
-    n_hits = len(hits)
+    n_hits = len(history)
+    original_docs = []
     n_candidates = 0
     bool_query = BooleanQuery.Builder()
     bool_query.add(TermQuery(Term('doc_type', 'cluster')), BooleanClause.Occur.MUST)
 
-    original_docs = []
-
-    for hit in hits:
-        bid = hit['business_id']
-        doc, cluster, cluster_size = get_business(bid, searcher)
+    for hit in history:
+        history_item_bid = hit['business_id']
+        doc, history_item_cluster, cluster_size = get_business(history_item_bid, searcher)
         original_docs.append(doc)
         n_candidates += cluster_size
-        bool_query.add(TermQuery(Term('cluster', cluster)), BooleanClause.Occur.SHOULD)
-        bool_query.add(TermQuery(Term('business_id', bid)), BooleanClause.Occur.MUST_NOT)
+        bool_query.add(
+            TermQuery(Term('cluster', history_item_cluster)), 
+            BooleanClause.Occur.SHOULD
+        )
+        bool_query.add(
+            TermQuery(Term('business_id', history_item_bid)), 
+            BooleanClause.Occur.MUST_NOT
+        )
 
     query = bool_query.build() 
     hits = searcher.search(query, n_candidates)
 
     candidates = []
-
     for hit in hits.scoreDocs:
         doc = reader.document(hit.doc)
         candidates.append(doc.get('business_id'))
@@ -722,7 +723,7 @@ def common_cluster_reco(hits,n_sim, searcher):
     return candidates, original_docs
 
 
-def business_reco(hits, n_sim, searcher):
+def business_reco(history, n_reco, searcher):
     '''
     Recommend businesses.
     If there have been previously viewed businesses (business by name task) , pick from those clusters
@@ -730,15 +731,13 @@ def business_reco(hits, n_sim, searcher):
     '''
     candidates = None
     original_docs = None
-    if not hits:
-        reco, cl = random_business_cluster_reco(searcher, n_sim)
-        candidates = reco
+    if not history:
+        candidates, cl = random_business_cluster_reco(searcher, n_reco)
     else:
-        reco, original_docs = common_cluster_reco(hits,n_sim, searcher)
-        candidates = reco
+        candidates, original_docs = history_cluster_reco(history, n_reco, searcher)
      
     rating = np.array([float(doc.get('stars')) for doc in candidates])
-    top_n = np.argsort(-rating)[:n_sim]
+    top_n = np.argsort(-rating)[:n_reco]
     reco = candidates[top_n].tolist() 
 
     return reco, original_docs
@@ -797,7 +796,7 @@ def terminal_ui(searcher):
         "3. Geospatial Search (Bounding Box)",
         "4. User Review Summary",
         "5. Distribution of reviews contributed by the users",
-        "6. Recommend Similar Businesses",
+        "6. Business Recommender (Application)",
         "7. Exit"
     ]
    
@@ -899,8 +898,12 @@ if __name__ == "__main__":
     index_directory = "./index"
     secondary_index_directory = "./secondary_index"
     # Open the index directory
-    reader = DirectoryReader.open(FSDirectory.open(Paths.get(index_directory)))
-    secondary_reader = DirectoryReader.open(FSDirectory.open(Paths.get(secondary_index_directory)))
+    reader = DirectoryReader.open(
+        FSDirectory.open(Paths.get(index_directory))
+    )
+    secondary_reader = DirectoryReader.open(
+        FSDirectory.open(Paths.get(secondary_index_directory))
+    )
     reader = MultiReader([reader, secondary_reader])
     searcher = IndexSearcher(reader)
 
