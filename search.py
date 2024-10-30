@@ -914,11 +914,13 @@ if __name__ == "__main__":
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
     
     # Parameter File
-    search_param_file = './search_parameters.json'
+    param_file = './parameters.json'
+    parameters = json.load(open(search_param_file, 'r'))
 
     # Define the path to the index directory
-    index_directory = "./index"
-    secondary_index_directory = "./secondary_index"
+    index_directory = parameters.get('INDEX.PRIMARY', './index')
+    secondary_index_directory = parameters.get('INDEX.SECONDARY', './secondary_index')
+    
     # Open the index directory
     reader = DirectoryReader.open(
         FSDirectory.open(Paths.get(index_directory))
@@ -929,7 +931,6 @@ if __name__ == "__main__":
     reader = MultiReader([reader, secondary_reader])
     searcher = IndexSearcher(reader)
     
-    parameters = json.load(open(search_param_file, 'r'))
 
     # Start the terminal UI for searching
     terminal_ui(searcher, parameters)

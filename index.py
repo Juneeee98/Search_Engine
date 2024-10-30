@@ -218,21 +218,38 @@ def filter_dataset_by_state(json_directory="./dataset", state="ID"):
 if __name__ == "__main__":
     # Initialize the Lucene JVM
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+    
+    parameter_file = './parameters.json'
+    parameters = json.load(open(parameter_file, 'r'))
 
     # Define the paths
-    index_directory = "./index"  # Where your index will be stored
-    business_json_file = "./dataset/yelp_academic_dataset_business.json"  # Path to business data
-    review_json_file = "./dataset/yelp_academic_dataset_review.json"  # Path to review data
+    index_directory = parameters.get('INDEX.PRIMARY', "./index")  # Where your index will be stored
 
+    dataset_root_folder = parameters.get('DATA.ROOT', './dataset')
+    business_json_file = parameters.get('DATA.BUSINESS', "yelp_academic_dataset_business.json")# Path to business data
+    review_json_file = parameters.get('DATA.REVIEW', "yelp_academic_dataset_review.json") # Path to review data
+    output_business_file = parameters.get('DATA.SUBSET_BUSINESS', 'id_business.json')
+    output_review_file = parameters.get('DATA.SUBSET_BUSINESS', 'id_review.json')
+
+    business_json_file = os.path.join(dataset_root_folder, business_json_file)
+    review_json_file = os.path.join(dataset_root_folder, review_json_file)
+    output_business_file = os.path.join(dataset_root_folder, output_business_file)
+    output_review_file = os.path.join(dataset_root_folder, output_review_file)
+    
+    
     # Check if the dataset directory exists
-    assert os.path.exists("./dataset"), f"Dataset directory not found at ./dataset"
-
+    assert os.path.exists(dataset_root_folder), f"Dataset directory not found at {dataset_root_folder}"
+    
     # Filter the dataset by state
-    if not os.path.exists("./dataset/id_business.json"):
-        filter_dataset_by_state(json_directory="./dataset", state="ID")
-    # Reassign files to
-    business_json_file = "./dataset/id_business.json"
-    review_json_file = "./dataset/id_review.json"
+    state = parameters.get('DATA.SUBSET', "ID")
+    need_to_filter = False
+    for path in [output_business_file, output_review_file]:
+        if os.path.exists(path): 
+            continue
+        need_to_filter = True
+        break
+    if need_to_filter:
+        filter_dataset_by_state(json_directory=dataset_root_folder, state=state)
 
     # Create the index and display size comparison
     create_index(index_directory, business_json_file, review_json_file)

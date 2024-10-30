@@ -1,5 +1,7 @@
 import lucene
 import time
+import json
+import numpy as np
 
 from index import get_directory_size
 
@@ -9,6 +11,7 @@ from org.apache.lucene.search import TermQuery, IndexSearcher, BooleanQuery, Boo
 from org.apache.lucene.index import DirectoryReader, Term, IndexWriter, IndexWriterConfig
 from org.apache.lucene.document import Document, StringField, IntField
 from org.apache.lucene.analysis.standard import StandardAnalyzer
+
 from java.nio.file import Paths
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -16,7 +19,6 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
 from sklearn.pipeline import make_pipeline
-import numpy as np
 
 def cluster_businesses(searcher, tfidf_args, svd_args, norm_args, kmeans_args):
     tfidf_vectorizer = TfidfVectorizer(**tfidf_args)
@@ -91,18 +93,21 @@ if __name__ == "__main__":
     # Initialize the Lucene JVM
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 
-    # Define the path to the index directory
-    index_directory = "./index"
-    secondary_index_directory = "./secondary_index"
+    # Define the paths
+    parameter_path = './parameters.json'
     
+    parameters = json.load(open(parameter_path, 'r'))
+    index_directory = parameters.get('INDEX.PRIMARY', './index')
+    secondary_index_directory = parameters.get('INDEX.SECONDARY', './secondary_index')
+
     tfidf_args = {
         'stop_words': 'english'
     }
 
     svd_args = {
-        'n_components': 200, 
-        'n_iter': 20,
-        'random_state': 42
+        'n_components': parameters.get('TSVD.N_COMPONENTS', 200),
+        'n_iter': parameters.get('TSVD.N_ITERATIONS', 20),
+        'random_state': parameters.get('TSVD.RANDOM_SEED', 42),
     }
 
     norm_args = {
@@ -110,7 +115,8 @@ if __name__ == "__main__":
     }
 
     kmeans_args = {
-        'n_clusters': 50
+        'n_clusters': parameters.get('KMEANS.N_CLUSTERS', 50),
+        'random_state': parameters.get('KMEANS.RANDOM_SEED', 42),
     }
 
     # create_secondary_index
