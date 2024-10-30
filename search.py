@@ -1,4 +1,5 @@
 import lucene
+import json
 import time
 import math
 import numpy as np
@@ -812,7 +813,7 @@ def terminal_ui(searcher, parameters):
     max_business_results = parameters.get('SEARCH.BUSINESS.MAX_RESULTS') 
     review_search_minimum_length = parameters.get('SEARCH.REVIEW.MIN_LEN')
     user_summary_similarity_threshold = parameters.get('SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH')
-    user_summary_max_reviews = parmaeters.get('SEARCH.SUMMARY.MAX_REVIEWS')
+    user_summary_max_reviews = parameters.get('SEARCH.SUMMARY.MAX_REVIEWS')
     
     review_feature_weights = {
         'funny': parameters.get('SEARCH.REVIEW.FEATURE_WEIGHTS_FUNNY'),
@@ -911,17 +912,9 @@ def terminal_ui(searcher, parameters):
 if __name__ == "__main__":
     # Initialize the Lucene JVM
     lucene.initVM(vmargs=['-Djava.awt.headless=true'])
-    parameters = dict()
-
-    parameters['APPLICATION.HISTORY_MAX_LEN'] = 10
-    parameters['SEARCH.BUSINESS.MAX_RESULTS'] = 1000
-    parameters['SEARCH.BUSINESS.MIN_LEN'] = 3
-    parameters['SEARCH.REVIEW.MIN_LEN'] = 3
-    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_USEFUL'] = 1.0
-    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_FUNNY'] = 0.5
-    parameters['SEARCH.REVIEW.FEATURE_WEIGHTS_COOL'] = 0.2
-    parameters['SEARCH.SUMMARY.COSINE_SIMILARITY_THRESH'] = .9
-    parmaeters['SEARCH.SUMMARY.MAX_REVIEWS'] = 10000
+    
+    # Parameter File
+    search_param_file = './search_parameters.json'
 
     # Define the path to the index directory
     index_directory = "./index"
@@ -935,6 +928,8 @@ if __name__ == "__main__":
     )
     reader = MultiReader([reader, secondary_reader])
     searcher = IndexSearcher(reader)
+    
+    parameters = json.load(open(search_param_file, 'r'))
 
     # Start the terminal UI for searching
     terminal_ui(searcher, parameters)
