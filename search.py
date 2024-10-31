@@ -444,7 +444,7 @@ def get_top_words_and_phrases(reviews, top_n=10):
         "top_phrases": phrase_count.most_common(top_n),
     }
 
-def get_representative_sentences(reviews, top_n=3, similaity_threshold=0.9):
+def get_representative_sentences(reviews, top_n=3, similarity_threshold=0.9):
     """
     Extract representative sentences from the user's reviews.
     """

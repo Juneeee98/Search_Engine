@@ -34,25 +34,29 @@ def cluster_businesses(searcher, tfidf_args, svd_args, norm_args, kmeans_args):
     print(f'Extracting Features From {len(hits)} Documents.')
     bids = []
     biz_features = []
-    for hit in hits:
+    for i,hit in enumerate(hits):
         doc = reader.document(hit.doc)
         categories = doc.get('categories') or ""
         name = doc.get('name')
         biz_features.append(name + " " + categories)
         bids.append(doc.get('business_id'))
-    
+
+    print('Transforming Features...', end='')
     lsa = make_pipeline(tfidf_vectorizer, svd, norm)
     reduced = lsa.fit_transform(biz_features)
-    print('Predicting Clusters...', end='')
+    print('Complete.')
+
+    print('Predicting Clusters...')
     clusters = kmeans.fit_predict(reduced)
-    print(' Complete.')
+    print('Complete.')
+    
     return bids, clusters
 
 
 def index_clusters(writer, searcher, bids, clusters):
     print('Indexing Clusters...', end='')
     reader = searcher.getIndexReader()
-    for cluster, bid in zip(clusters, bids):
+    for i, (cluster, bid) in enumerate(zip(clusters, bids)):
         bid_query = TermQuery(Term('business_id', bid))
         dt_query = TermQuery(Term('doc_type', 'business'))
         boolean_query = BooleanQuery.Builder()
@@ -83,6 +87,8 @@ def create_secondary_index(index_directory, secondary_index_directory, tfidf_arg
     try:
         index_clusters(writer, searcher, bids, clusters)
         writer.commit()
+    except Exception as e:
+        print("Error", e)
     finally:
         writer.close()
   
@@ -121,4 +127,8 @@ if __name__ == "__main__":
     }
 
     # create_secondary_index
-    create_secondary_index(index_directory, secondary_index_directory, tfidf_args, svd_args, norm_args, kmeans_args)
+    try: 
+        create_secondary_index(index_directory, secondary_index_directory, tfidf_args, svd_args, norm_args, kmeans_args)
+    except Exception as e:
+        print(e)
+
