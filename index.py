@@ -192,12 +192,12 @@ def prepare_dataset_paths(parameters):
     output_review_name = f'{state.lower()}_review.json'
     
     # Check if the dataset directory exists
-    assert os.path.exists(input_directory), f"Dataset directory not found at {input_directory}"
+    assert os.path.exists(json_directory), f"Dataset directory not found at {json_directory}"
 
     business_file_path = os.path.join(json_directory, business_file_name)
     review_file_path = os.path.join(json_directory, review_file_name)
-    filtered_file_path = os.path.join(json_directory, json_business_name)
-    filtered_review_file_path = os.path.join(json_directory, json_review_name)
+    filtered_file_path = os.path.join(json_directory, output_business_name)
+    filtered_review_file_path = os.path.join(json_directory, output_review_name)
 
     paths = business_file_path, review_file_path, filtered_file_path, filtered_review_file_path
     return state, paths

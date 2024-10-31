@@ -30,6 +30,7 @@ def cluster_businesses(searcher, tfidf_args, svd_args, norm_args, kmeans_args):
     n = reader.maxDoc()
     query = TermQuery(Term('doc_type', 'business'))    
     hits = searcher.search(query, n)
+    hits = hits.scoreDocs
     print(f'Extracting Features From {len(hits)} Documents.')
     bids = []
     biz_features = []
