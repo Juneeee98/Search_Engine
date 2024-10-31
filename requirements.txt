@@ -17,7 +17,6 @@ joblib==1.4.2
 kiwisolver==1.4.7
 langcodes==3.4.1
 language_data==1.2.0
-lucene==9.7.0
 marisa-trie==1.2.1
 markdown-it-py==3.0.0
 MarkupSafe==3.0.2
