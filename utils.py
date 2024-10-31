@@ -1,17 +1,16 @@
 import json
 
 FIXED_PARAMETERS = {
-    "DATA.BUSINESS": "yelp_academic_dataset_business.json",
-    "DATA.REVIEW": "yelp_academic_dataset_review.json",
-    "INDEX.PRIMARY": "./index",
-    "INDEX.SECONDARY": "./secondary_index",
 }
 
 DEFAULT_PARAMETERS = {
+    "INDEX.PRIMARY": "./index",
+    "INDEX.SECONDARY": "./secondary_index",
+
     "DATA.ROOT": "./dataset",
+    "DATA.BUSINESS": "yelp_academic_dataset_business.json",
+    "DATA.REVIEW": "yelp_academic_dataset_review.json",
     "DATA.SUBSET": "ID",
-    "DATA.SUBSET_BUSINESS": "id_business.json",
-    "DATA.SUBSET_REVIEW": "id_review.json",
 
     "SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS" : 1000,
     "SEARCH.BUSINESS.MIN_LEN" : 3,
@@ -28,7 +27,8 @@ DEFAULT_PARAMETERS = {
     "TSVD.N_ITERATIONS": 20,
     "TSVD.RANDOM_SEED": 42,
 
-    "SEARCH.APPLICATION.HISTORY_MAX_LEN" : 10
+    "SEARCH.APPLICATION.HISTORY_MAX_LEN" : 10,
+    "SEARCH.APPLICATION.RESULT_MAX_WIDTH": 200
 }
 
 VALIDATION_ARGS = [
@@ -38,8 +38,6 @@ VALIDATION_ARGS = [
     ("DATA.BUSINESS", str),
     ("DATA.REVIEW", str),
     ("DATA.SUBSET", str),
-    ("DATA.SUBSET_BUSINESS", str),
-    ("DATA.SUBSET_REVIEW", str),
     ("SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS", int, 1000, 1000),
     ("SEARCH.BUSINESS.MIN_LEN", int, 1),
     ("SEARCH.REVIEW.MIN_LEN", int, 1),
@@ -53,7 +51,8 @@ VALIDATION_ARGS = [
     ("TSVD.N_ITERATIONS", int, 1),
     ("KMEANS.RANDOM_SEED", int),
     ("TSVD.RANDOM_SEED", int),
-    ("SEARCH.APPLICATION.HISTORY_MAX_LEN", int, 1, 1000)
+    ("SEARCH.APPLICATION.HISTORY_MAX_LEN", int, 1, 1000),
+    ("SEARCH.APPLICATION.RESULT_MAX_WIDTH", int, 40)
 ]
 
 def validate_key(_dict, key):

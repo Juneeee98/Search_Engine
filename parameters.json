@@ -1,8 +1,11 @@
 {
+    "INDEX.PRIMARY": "./index",
+    "INDEX.SECONDARY": "./secondary_index",
+
     "DATA.ROOT": "./dataset",
+    "DATA.BUSINESS": "yelp_academic_dataset_business.json",
+    "DATA.REVIEW": "yelp_academic_dataset_review.json",
     "DATA.SUBSET": "ID",
-    "DATA.SUBSET_BUSINESS": "id_business.json",
-    "DATA.SUBSET_REVIEW": "id_review.json",
 
     "SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS" : 1000,
     "SEARCH.BUSINESS.MIN_LEN" : 3,
@@ -19,5 +22,6 @@
     "TSVD.N_ITERATIONS": 20,
     "TSVD.RANDOM_SEED": 42,
 
-    "SEARCH.APPLICATION.HISTORY_MAX_LEN" : 10
+    "SEARCH.APPLICATION.HISTORY_MAX_LEN" : 10,
+    "SEARCH.APPLICATION.RESULT_MAX_WIDTH" : 75
 }

@@ -744,36 +744,57 @@ def business_reco(history, n_reco, searcher):
 
     return reco, original_docs
 
-def print_recommendations(reco_out, n):
+def print_recommendations(reco_out, n, print_max_width):
     '''
     Format output for application task
     '''
     reco, orig = reco_out
     
+    def print_business(doc):
+        name = doc.get('name')
+        stars = doc.get('stars') or 0.0
+        address = doc.get('address') or "Address Not Listed"
+        city = doc.get('city') or "City Not Listed"
+        state = doc.get('state') or "State Not Listed"
+        categories = doc.get('categories') or ""
+        stars = float(stars)
+        lines = [
+            ('Name', f'{name}'),
+            ('Categories', f'{categories}'),
+            ('Avg. Rating', f'{stars:.1f}/5.0'),
+            ('State', f'{state}'),
+            ('City', f'{city}'),
+            ('Address', f'{address}')
+        ]
+        col_1_width = 4 + max([len(line[0]) for line in lines])
+        
+        for col1, col2 in lines:
+            col1 = (f'{col1}:   ').ljust(col_1_width, ' ')
+            line = f'{col1}{col2}'
+            if len(line) <= print_max_width:
+                print(line)
+            else:
+                line = line[:print_max_width - 3] + "..."
+                print(line)
+    
     if orig:
-        print("-" * 40)
-        print('Because you looked at:')
-        print("-" * 40)
+        print("-" * print_max_width)
+        print('Because you previously looked at these businesses:')
+        print("-" * print_max_width)
         for doc in orig:
-            print(doc.get('name'))
-            print(doc.get('categories'))
-            print(doc.get('stars'))
-            print(doc.get('address'))
-            print("-" * 40)
+            print_business(doc)
+            print("-" * print_max_width)
     else:
-        print("-" * 40)
-    print('Maybe consider paying a visit to:')
-    print("-" * 40)
+        print("-" * print_max_width)
+    print('Maybe consider paying a visit to these businesses:')
+    print("-" * print_max_width)
     for i, doc in enumerate(reco):
-        print(f'{i} / {n}')
-        print(doc.get('name'))
-        print(doc.get('categories'))
-        print(doc.get('stars'))
-        print(doc.get('address'))
-        print("-" * 40)
+        print(f'Recommendation #{i+1}')
+        print_business(doc)
+        print("-" * print_max_width)
 
     print('End of Results')
-    print("-" * 40)
+    print("-" * print_max_width)
 
 
 def prompt_for_N():
@@ -810,6 +831,7 @@ def terminal_ui(searcher, parameters):
    
     last_business_hits = []
     history_max_length = parameters.get('SEARCH.APPLICATION.HISTORY_MAX_LEN')
+    application_print_max_width = parameters.get('SEARCH.APPLICATION.RESULT_MAX_WIDTH')
     business_search_minimum_length = parameters.get('SEARCH.BUSINESS.MIN_LEN') 
     max_business_results = parameters.get('SEARCH.BUSINESS.INDEX_ELIMINATION_MAX_RESULTS') 
     review_search_minimum_length = parameters.get('SEARCH.REVIEW.MIN_LEN')
@@ -841,9 +863,9 @@ def terminal_ui(searcher, parameters):
         
         elif choice == 6:
             N = prompt_for_N()
-            hits = last_business_hits
-            reco_out = business_reco(hits, N, searcher)
-            print_recommendations(reco_out, N)
+            history = last_business_hits
+            reco_out = business_reco(history, N, searcher)
+            print_recommendations(reco_out, N, application_print_max_width)
             
         elif choice == 4:
             user_id = input("Enter the user ID: ").strip()

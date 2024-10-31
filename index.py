@@ -183,13 +183,32 @@ def create_index(index_dir, business_json_file, review_json_file):
     print(f"Index Size: {index_size / (1024 ** 2):.2f} MB")
     print(f"Reduction Factor: {(original_data_size / index_size):.2f}")
 
-def filter_dataset_by_state(json_directory="./dataset", state="ID"):
+def prepare_dataset_paths(parameters):
+    state = parameters.get('DATA.SUBSET')
+    business_file_name = parameters.get('DATA.BUSINESS')
+    review_file_name = parameters.get('DATA.REVIEW')
+    json_directory = parameters.get('DATA.ROOT')
+    output_business_name = f'{state.lower()}_business.json'
+    output_review_name = f'{state.lower()}_review.json'
+    
+    # Check if the dataset directory exists
+    assert os.path.exists(input_directory), f"Dataset directory not found at {input_directory}"
+
+    business_file_path = os.path.join(json_directory, business_file_name)
+    review_file_path = os.path.join(json_directory, review_file_name)
+    filtered_file_path = os.path.join(json_directory, json_business_name)
+    filtered_review_file_path = os.path.join(json_directory, json_review_name)
+
+    paths = business_file_path, review_file_path, filtered_file_path, filtered_review_file_path
+    return state, paths
+
+def filter_dataset_by_state(parameters):
     """
     Filters the business dataset by state and saves the filtered data to a new file.
     """
-    # Load the business data
-    business_file_path = os.path.join(json_directory, "yelp_academic_dataset_business.json")
-    filtered_file_path = os.path.join(json_directory, f"{state.lower()}_business.json")
+    # Prepare input and output paths
+    state, paths = prepare_dataset_paths(parameters)
+    business_file_path, review_file_path, filtered_file_path, filtered_review_file_path = paths
 
     # Filter the business data by state
     print(f"Filtering business data by state: {state}")
@@ -201,10 +220,6 @@ def filter_dataset_by_state(json_directory="./dataset", state="ID"):
                 filtered_file.write(json.dumps(business_data) + "\n")
                 business_ids.add(business_data.get("business_id"))
 
-    # Load reviews data
-    review_file_path = os.path.join(json_directory, "yelp_academic_dataset_review.json")
-    filtered_review_file_path = os.path.join(json_directory, f"{state.lower()}_review.json")
-
     # Filter the review data by state
     print(f"Filtering review data by state: {state}")
     with open(review_file_path, "r") as review_file, open(filtered_review_file_path, "w") as filtered_review_file:
@@ -215,6 +230,7 @@ def filter_dataset_by_state(json_directory="./dataset", state="ID"):
 
     print(f"Filtered business data saved to {filtered_file_path}")
     print(f"Filtered review data saved to {filtered_review_file_path}")
+    return filtered_file_path, filtered_review_file_path
 
 if __name__ == "__main__":
     # Initialize the Lucene JVM
@@ -225,24 +241,10 @@ if __name__ == "__main__":
 
     # Define the paths
     index_directory = parameters.get('INDEX.PRIMARY', "./index")  # Where your index will be stored
-
-    dataset_root_folder = parameters.get('DATA.ROOT', './dataset')
-    business_json_file = parameters.get('DATA.BUSINESS', "yelp_academic_dataset_business.json")# Path to business data
-    review_json_file = parameters.get('DATA.REVIEW', "yelp_academic_dataset_review.json") # Path to review data
-    output_business_file = parameters.get('DATA.SUBSET_BUSINESS', 'id_business.json')
-    output_review_file = parameters.get('DATA.SUBSET_BUSINESS', 'id_review.json')
-
-    business_json_file = os.path.join(dataset_root_folder, business_json_file)
-    review_json_file = os.path.join(dataset_root_folder, review_json_file)
-    output_business_file = os.path.join(dataset_root_folder, output_business_file)
-    output_review_file = os.path.join(dataset_root_folder, output_review_file)
-    
-    
-    # Check if the dataset directory exists
-    assert os.path.exists(dataset_root_folder), f"Dataset directory not found at {dataset_root_folder}"
     
     # Filter the dataset by state
-    state = parameters.get('DATA.SUBSET', "ID")
+    state, paths = prepare_dataset_paths(parameters)
+    _, _, output_business_file, output_review_file = paths
     need_to_filter = False
     for path in [output_business_file, output_review_file]:
         if os.path.exists(path): 
@@ -250,7 +252,7 @@ if __name__ == "__main__":
         need_to_filter = True
         break
     if need_to_filter:
-        filter_dataset_by_state(json_directory=dataset_root_folder, state=state)
+        filter_dataset_by_state(parameters)
 
     # Create the index and display size comparison
-    create_index(index_directory, business_json_file, review_json_file)
+    create_index(index_directory, output_business_file, output_review_file)
